@@ -28,14 +28,34 @@ b.	3’: CTCGAGCACCACCACCACCACCACTGAGATCCGGCTGCTAACAAAGC  (i.e. rev comp of 5’
 
 
 ## Step 1: 
+
+Codon optimize your gene sequneces for whichever organism you are planning on expressing with. 
+
+I do this using IDT. You can bulk upload your sequences and then download them as a fasta file. **This is your input to this tool!**
+
 ### Simple pools:
-Here you have a simple pool with only sequences < 350nt.
+Here you have a simple pool with only DNA sequences < 350nt.
+
 When you have short sequneces you just need to ensure that you create the gene sequnence with an overhanmg to the backbone. Then you can use universal primers to amplify the pool (see Generic primers above).
+
+
+command:
+```
+
+```
 
 ### Chimera pools:
 Here you have pools with sequences between 350nt and 700nt (e.g. the protoglobins.) In this case the pool will have two sequences for each one, and we need an "overhang" to join 
 the two parts of the sequence together. So essentially, you want 1) an overhang with the backbone, 2) an overlap with the other sequence, 3) you need to order primers for both the 5-->3 and 3--> for the overhang 
 to ensure it amplifies correctly.
+
+Again this is just your codon optimized DNA sequences for your genes you want to order, note they should be less than 640 base pairs! 
+
+command:
+```
+
+```
+##### Chimera pool explanation:
 
 Part 1 is the start of the gene:  
 -	15bp upstream + gene to 50% of gene  
@@ -64,7 +84,7 @@ gcagcgtgttcgtcgtttGCGCGAAGAGGAGGTATCCCCGGAACCTAAAGTCAGTGAGGGGTTTGCTCCCGCGTCAGAAA
 
 
 ### Primer design
-All the primer design stuff here is ai
+All the primer design stuff here is just appended so you should have checked your primers before. I do check the primers using primer3 and provide feedback about the melting temp.
 
 
 ### Debugging bench stuff

@@ -2,6 +2,12 @@ from Bio import SeqIO
 import pandas as pd
 from sciutil import SciUtil
 from Bio.Seq import Seq
+import os
+import pandas as pd
+from Bio import SeqIO
+import pysam
+import numpy as np
+from collections import defaultdict
 
 u = SciUtil()
 
@@ -53,14 +59,6 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
 
 # Take the demultiplexed files from a LevSeq run and then demultiplex oligoPools from these
 
-import os
-import pandas as pd
-from Bio import SeqIO
-import pysam
-import numpy as np
-from collections import defaultdict
-
-#export PATH=/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/X11/bin:/Users/arianemora/miniconda3/envs/etk/bin:/Users/arianemora/miniconda3/condabin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/arianemora/Documents/code/MinION/software/minimap2-2.24:/Users/arianemora/Documents/code/MinION/software/samtools-1.15.1:/Users/arianemora/Documents/code/MinION/software/bcftools-1.15.1:/Users/arianemora/Documents/code/MinION/software/htslib-1.15.1:/Users/arianemora/Documents/code/MinION/software
 def alignment_from_cigar(cigar: str, alignment: str, ref: str, query_qualities: list):
     """
     Generate the alignment from the cigar string.
@@ -202,3 +200,72 @@ def annotate_to_wells(plate_path, ref_fasta):
     if len(rows_all) > 1:  # Check if we have anything to return
         seq_df = pd.DataFrame(rows_all, columns=['Well', 'Number of reads', 'Assigned ID', 'Reads for Assigned ID'] + ref_read_ids)
         seq_df.to_csv('cutadapt_demultiplex_seqs.csv', index=False)
+
+
+
+def optimize_primer(plasmid_sequence, gene_sequence, desired_tm, direction, min_length=10, max_length=60,
+                    tm_tolerance=5, max_temp_deviation = 20, his_tag=False):
+    """Optimize a primer sequence to achieve a desired Tm by adjusting its length."""
+
+    best_primer = 'None'
+    temp = 0
+    if direction == 'forward':
+        gene_sequence = gene_sequence
+    elif direction == 'reverse':
+        # Reverse comp it
+        gene_sequence = str(Seq(gene_sequence).reverse_complement())
+    else:
+        u.dp([f'Direction: {direction} is not an option, must be: forward or reverse.'])
+    if his_tag and direction == 'reverse':
+        min_length = 33  # i.e. the 18 of his tag + the seq
+    for primer_length in range(0, 15, 3):
+        for length in range(min_length, max_length, 3):
+            plas_seq = plasmid_sequence[-1*(primer_length + 9):]
+            temp_primer = plas_seq + gene_sequence[:length]
+            tm = primer3.bindings.calcTm(temp_primer)
+            temp_deviation = abs(desired_tm - tm)
+            if temp_deviation < max_temp_deviation and temp_deviation < tm_tolerance and (temp_primer[-1] == 'C' or temp_primer[-1] == 'G'):
+                max_temp_deviation = temp_deviation
+                best_primer = plas_seq.lower() + gene_sequence[:length]
+                temp = tm
+    return best_primer, temp
+
+def make_primer(gene, max_length=60, min_length=15, tm_tolerance=30, desired_tm=62.0, 
+                forward_primer='gaaataattttgtttaactttaagaaggagatatacat', reverse_primer='ctttgttagcagccggatc'):
+    # Standard pET-22b(+) primer sequences
+    forward_plasmid_primer = forward_primer.upper()  # Cut off a bit and then do the same for the tail
+    # Play with the length to get the melting but you can optimise for around 38 length --> Full GCTTTGTTAGCAG  --> CCGGATCTCA
+    reverse_plasmid_primer = reverse_primer.upper()
+    # Desired Tm range for optimization
+    # Target melting temperature in °C
+    # Generate and optimize forward primer
+    forward_gene_primer, forward_tm = optimize_primer(forward_plasmid_primer, gene, desired_tm, 'forward',
+                                                      min_length, max_length, tm_tolerance)
+    reverse_gene_primer, reverse_tm = optimize_primer(reverse_plasmid_primer, gene, desired_tm, 'reverse',
+                                                      min_length, max_length, tm_tolerance, his_tag=True)
+
+    print(f"Forward Gene Primer: 5'-{forward_gene_primer}-3' (Tm: {forward_tm:.2f} °C)")
+    print(f"Reverse Gene Primer: 3'-{reverse_gene_primer}-5' (Tm: {reverse_tm:.2f} °C)")
+    return forward_gene_primer, forward_tm, reverse_gene_primer, reverse_tm 
+
+def make_primers_IDT(fasta_file):
+    seqs = {}
+    for record in SeqIO.parse(fasta_file, "fasta"):
+        try:
+            seq_id = str(record.id)
+            seqs[seq_id] = str(record.seq)
+        except:
+            print(record.description)
+    rows = []
+    for gene in seqs:
+        gene_seq = seqs.get(gene)
+        if gene_seq:
+            forward_gene_primer, forward_tm, reverse_gene_primer, reverse_tm = make_primer(gene_seq[:-3] + 'CACCACCACCACCACCAC') # Cut off the stop codon and add in the his Tag
+            rows.append([f'5F_{gene}', forward_gene_primer, '25nm', 'STD'])
+            rows.append([f'3R_{gene}', reverse_gene_primer, '25nm', 'STD'])
+            print(len(forward_gene_primer), len(reverse_gene_primer))
+        else:
+            print(gene)
+    primer_df = pd.DataFrame(rows)
+    primer_df.columns = ['Name', 'Sequence', 'Scale', 'Purification']
+    return primer_df
