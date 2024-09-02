@@ -1,5 +1,25 @@
 # Code and protocols for making oligopools for ordering proteins
 
+### Setting up the code
+
+```
+conda create --name oligo python=3.10
+```
+
+```
+conda activate oligo
+pip install -r requirements.txt 
+```
+
+### Dependencies 
+None outside python for the primer generation.  
+
+For the demultiplexing and annotating reads you'll need the following tools added to your path.  
+1. clustal-omega
+2. samtools
+3. minimap2
+
+
 ## Generic primers order:
 
 Generic primers:  
