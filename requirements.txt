@@ -11,3 +11,5 @@ opencv-python
 pandas
 pysam
 numpy
+gffutils
+npysearch

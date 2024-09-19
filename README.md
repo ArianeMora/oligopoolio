@@ -15,28 +15,28 @@ pip install -r requirements.txt
 None outside python for the primer generation.  
 
 For the demultiplexing and annotating reads you'll need the following tools added to your path.  
-1. clustal-omega
-2. samtools
-3. minimap2
-
+1. clustal-omega  
+2. samtools  
+3. minimap2  
 
 ## Generic primers order:
 
 Generic primers:  
-a.	5’: gaaataattttgtttaactttaagaaggagatatacat   
-b.	3’: CTCGAGCACCACCACCACCACCACTGAGATCCGGCTGCTAACAAAGC  (i.e. rev comp of 5’ to 3’ region of the end) Histag + 006 primer commonly used in the Arnold lab   
+a.	5’: `gaaataattttgtttaactttaagaaggagatatacat`
+b.	3’: `CTCGAGCACCACCACCACCACCACTGAGATCCGGCTGCTAACAAAGC`  (i.e. rev comp of 5’ to 3’ region of the end) Histag + 006 primer commonly used in the Arnold lab   
 
 
 ## Step 1: 
 
-Codon optimize your gene sequneces for whichever organism you are planning on expressing with. 
+Codon optimize your gene sequences for whichever organism you are planning on expressing with. 
 
 I do this using IDT. You can bulk upload your sequences and then download them as a fasta file. **This is your input to this tool!**
 
 ### Simple pools:
 Here you have a simple pool with only DNA sequences < 350nt.
 
-When you have short sequneces you just need to ensure that you create the gene sequnence with an overhanmg to the backbone. Then you can use universal primers to amplify the pool (see Generic primers above).
+When you have short sequences you just need to ensure that you create the gene sequences with an overhang to the backbone. 
+Then you can use universal primers to amplify the pool (see Generic primers above).
 
 
 command:
@@ -68,9 +68,9 @@ Part 2 is the end of the gene:
 
 
 #### Example of a chimera
-Gaaggagatatacat = overlap with backbone
-Gcagcgtgttcgtcgttt = overlap between the two oligos
-Gatccggctgctaac = Overlap with the 3’ primer backbone
+Gaaggagatatacat = overlap with backbone  
+Gcagcgtgttcgtcgttt = overlap between the two oligos  
+Gatccggctgctaac = Overlap with the 3’ primer backbone  
 
 **Oligo for part 1:**  
 gaaggagatatacatATGGACGACCTGGAACGTGCAGGCAAAGATGCGTGGACATTTGAAAAGGCATTAGCGCGCCTGGAAGAAGTAGTAGAACGTCTGGAGAGTGCAGACCTGCCATTGGATAAGGCATTAAGTCTTTACGAGGAGGGCACCCGCCTTGTTCGTTATCTGAACGGTGAATTGAATCGTTTTGAgcagcgtgttcgtcgttt
@@ -79,8 +79,8 @@ gaaggagatatacatATGGACGACCTGGAACGTGCAGGCAAAGATGCGTGGACATTTGAAAAGGCATTAGCGCGCCTGGA
 gcagcgtgttcgtcgtttGCGCGAAGAGGAGGTATCCCCGGAACCTAAAGTCAGTGAGGGGTTTGCTCCCGCGTCAGAAAATGAGTTGTTTCCCTTCGAGGGAGAGGAAGATTTCGCGGAGTGGGAGGATGAAATCGAATTTGAGGAGGAGTTCCCCGGCGAAGAGGAAGAGGGTGATGATCCCAATCCACGTCTTgatccggctgctaac
 
 **Middle of the gene primers:**  
--	Overhang 5’--> 3’: GCAGCGTGTTCGTCGTTT  
--	Overhang reverse complement 3’-->5’: AAACGACGAACACGCTGC  
+-	Overhang 5’--> 3’: GCAGCGTGTTCGTCGTTT    
+-	Overhang reverse complement 3’-->5’: AAACGACGAACACGCTGC    
 
 
 ### Primer design
