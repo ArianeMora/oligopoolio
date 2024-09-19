@@ -295,7 +295,7 @@ def make_primers_IDT(fasta_file, remove_stop_codon=True, his_tag='',
             forward_gene_primer, forward_tm, reverse_gene_primer, reverse_tm = make_primer(gene_seq,
                                                                                            max_length=max_length,
                                                                                            min_length=min_length,
-                                                                                           tm_toleranc=tm_tolerance,
+                                                                                           tm_tolerance=tm_tolerance,
                                                                                            desired_tm=desired_tm,
                                                                                            forward_primer=forward_primer,
                                                                                            reverse_primer=reverse_primer)

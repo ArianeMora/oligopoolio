@@ -58,7 +58,9 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
     rows = []
     fwd = forward_primer[-1*forward_primer_len:]
     bwd = reverse_primer[:reverse_primer_len]
-    for seq_id, seq in records.values:
+    for r in records:
+        seq_id = r.id
+        seq = str(r.seq)
         if seq[:3] == 'ATG' and len(seq) < max_len:
             cut = int(len(seq)/2)
             first_half = seq[:cut-overlap_len]

@@ -25,6 +25,7 @@ u = SciUtil()
 
 test_data_dir = os.path.join(os.path.dirname(__file__), 'data/')
 
+
 class TestPrimers(unittest.TestCase):
 
     def test_primer_making(self):
@@ -59,7 +60,6 @@ class TestPrimers(unittest.TestCase):
 
         print(f"Forward Gene Primer: 5'-{forward_gene_primer}-3' (Tm: {forward_tm:.2f} °C)")
         print(f"Reverse Gene Primer: 5'-{reverse_gene_primer}-3' (Tm: {reverse_tm:.2f} °C)")
-
 
     def test_get_flanking(self):
         gff_file = f'{test_data_dir}genome_NEB_B/genomic.gff'
@@ -111,5 +111,34 @@ class TestPrimers(unittest.TestCase):
         assert 'TACC' == upstream_flank[-4:]
         assert 'CGCC' == downstream_flank[:4]
         # At the moment I'm unsure if the flanks need to be reversed?
+
+    def test_from_fasta(self):
+        fasta_file = f'{test_data_dir}example_fasta.fasta'
+        df = make_primers_IDT(fasta_file, remove_stop_codon=True, his_tag='',
+                              max_length=60, min_length=15, tm_tolerance=30, desired_tm=62.0,
+                              forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                              reverse_primer='ctttgttagcagccggatc')
+        assert len(df) == 8
+        assert df['Sequence'].values[0] == 'ctttaagaaggagatatacatATGACCATAGACAAAAATTGG'
+
+    def test_single_oligo(self):
+        fasta_file = f'{test_data_dir}example_fasta.fasta'
+        df = make_oligo_single(fasta_file, forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                          forward_primer_len=15, reverse_primer='gatccggctgctaacaaag', reverse_primer_len=15,
+                          max_len=320)
+        assert df['forward_primer'].values[0] == 'gaaggagatatacat'
+
+
+    def test_double_oligo(self):
+        fasta_file = f'{test_data_dir}example_fasta.fasta'
+
+        df = make_oligo_double(fasta_file, forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                          forward_primer_len=15, reverse_primer='gatccggctgctaacaaag', reverse_primer_len=15,
+                          max_len=640,
+                          overlap_len=9)
+
+
+
+
 
 

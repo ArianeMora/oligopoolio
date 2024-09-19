@@ -8,6 +8,8 @@ conda create --name oligo python=3.10
 
 ```
 conda activate oligo
+git clone git@github.com:ArianeMora/oligopoolio.git
+cd oligopoolio
 pip install -r requirements.txt 
 ```
 
@@ -36,6 +38,8 @@ I do this using IDT. You can bulk upload your sequences and then download them a
 To generate a primer for a single sequence you would do:
 
 ```
+from oligopoolio import *
+
 # Placeholder gene ends (replace with your actual gene sequences)
 gene = "ATGAGCGATCTGCATAACGAGTCCATTTTTATTACCGGCGGCGGATCGGGATTAGGGCTGGCGCTGGTCGAGCGATTTAT\
 CGAAGAAGGCGCGCAGGTTGCCACGCTGGAACTGTCGGCGGCAAAAGTCGCCAGTCTGCGTCAGCGATTTGGCGAACATA\
