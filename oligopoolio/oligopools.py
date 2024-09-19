@@ -23,7 +23,7 @@ Date: September 2024
 import os
 import pysam
 from collections import defaultdict
-from primers import *
+from oligopoolio.primers import *
 
 
 u = SciUtil()
@@ -162,8 +162,6 @@ def annotate_to_wells(plate_path, ref_fasta):
             # Ensure the BAM file is indexed
             if not os.path.exists(bam_file_path + ".bai"):
                 pysam.index(bam_file_path)
-
-            cramHeader = bam.header.to_dict()
             
             seqs = []
             read_ids = []

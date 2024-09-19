@@ -91,7 +91,8 @@ Then you can use universal primers to amplify the pool (see Generic primers abov
 
 command:
 ```
-
+make_oligo_single(codon_optimized_fasta, forward_primer='gaaataattttgtttaactttaagaaggagatatacat', 
+                      forward_primer_len=15, reverse_primer='gatccggctgctaacaaag', reverse_primer_len=15, max_len=320)
 ```
 
 ### Chimera pools:
@@ -103,7 +104,9 @@ Again this is just your codon optimized DNA sequences for your genes you want to
 
 command:
 ```
-
+make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaactttaagaaggagatatacat', 
+                      forward_primer_len=15, reverse_primer='gatccggctgctaacaaag', reverse_primer_len=15, max_len=640, 
+                      overlap_len=9)
 ```
 ##### Chimera pool explanation:
 
