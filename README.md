@@ -8,9 +8,7 @@ conda create --name oligo python=3.10
 
 ```
 conda activate oligo
-git clone git@github.com:ArianeMora/oligopoolio.git
-cd oligopoolio
-pip install -r requirements.txt 
+pip install oligopoolio
 ```
 
 ### Dependencies 
