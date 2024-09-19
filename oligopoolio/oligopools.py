@@ -1,14 +1,30 @@
-from Bio import SeqIO
-import pandas as pd
-from sciutil import SciUtil
-from Bio.Seq import Seq
+###############################################################################
+#                                                                             #
+#    This program is free software: you can redistribute it and/or modify     #
+#    it under the terms of the GNU General Public License as published by     #
+#    the Free Software Foundation, either version 3 of the License, or        #
+#    (at your option) any later version.                                      #
+#                                                                             #
+#    This program is distributed in the hope that it will be useful,          #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #
+#    GNU General Public License for more details.                             #
+#                                                                             #
+#    You should have received a copy of the GNU General Public License        #
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                             #
+###############################################################################
+
+"""
+Author: Ariane Mora
+Date: September 2024
+"""
+
 import os
-import pandas as pd
-import primer3
-from Bio import SeqIO
 import pysam
-import numpy as np
 from collections import defaultdict
+from primers import *
+
 
 u = SciUtil()
 
@@ -187,7 +203,7 @@ def annotate_to_wells(plate_path, ref_fasta):
                 read_ids = [str(record.id) for record in SeqIO.parse(msa_path.replace(".fa", "_msa.fa"), "fasta")]
         except:
             print(well)
-        #Again check that we actually had enough reads for this to be considered a good well
+        # Again check that we actually had enough reads for this to be considered a good well
         # Count how many unique read IDs mapped to this (we hope that it is all the same )
         bam.close()
         # Get the number for each read in there

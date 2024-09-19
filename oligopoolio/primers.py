@@ -25,7 +25,8 @@ import primer3
 from sciutil import SciUtil
 import gffutils
 import pandas as pd
-
+from Bio import SeqIO
+import pandas as pd
 
 u = SciUtil()
 
