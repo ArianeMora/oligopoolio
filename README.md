@@ -32,6 +32,56 @@ Codon optimize your gene sequences for whichever organism you are planning on ex
 
 I do this using IDT. You can bulk upload your sequences and then download them as a fasta file. **This is your input to this tool!**
 
+#### Getting primers
+To generate a primer for a single sequence you would do:
+
+```
+# Placeholder gene ends (replace with your actual gene sequences)
+gene = "ATGAGCGATCTGCATAACGAGTCCATTTTTATTACCGGCGGCGGATCGGGATTAGGGCTGGCGCTGGTCGAGCGATTTAT\
+CGAAGAAGGCGCGCAGGTTGCCACGCTGGAACTGTCGGCGGCAAAAGTCGCCAGTCTGCGTCAGCGATTTGGCGAACATA\
+AATAATCGCGCATTAAGCGGTGTGATGATCAACGCTGATGCGGGTTTAGCGATTCGCGGCATTCGCCACGTAGCGGCTGG\
+GCTGGATCTTTAA"
+
+# Standard pET-22b(+) primer sequences
+forward_plasmid_primer = "GGAGATATACATATG"
+reverse_plasmid_primer = "GCTTTGTTAGCAGCCGGATCTCA"
+
+# Desired Tm range for optimization
+desired_tm = 62.0  # Target melting temperature in °C
+tm_tolerance = 5.0  # Allowable deviation from the desired Tm
+
+# Generate and optimize forward primer
+min_length = 13
+max_length = 20
+forward_gene_primer, forward_tm = optimize_primer(forward_plasmid_primer, gene, desired_tm, 'forward',
+                                                  min_length, max_length, tm_tolerance)
+reverse_gene_primer, reverse_tm = optimize_primer(reverse_plasmid_primer, gene, desired_tm, 'reverse',
+                                                  min_length, max_length, tm_tolerance)
+```
+
+To generate a primer for a fasta file of sequences you would do the following (this will output it for IDT):
+
+```
+make_primers_IDT(fasta_file, remove_stop_codon=True, his_tag='',
+                     max_length=60, min_length=15, tm_tolerance=30, desired_tm=62.0,
+                     forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                     reverse_primer='ctttgttagcagccggatc')
+```
+
+
+#### Get flanking primers e.g. you want to PCR a gene out of E.coli
+
+You need the GFF file, you can download this from NCBI, and the gene sequence (here you don't need to 
+do the optimization from IDT since it is already in the nucleotide sequence).
+```
+gff_file = f'{test_data_dir}genome_NEB_B/genomic.gff'
+reference_fasta = f'{test_data_dir}genome_NEB_B/GCF_001559615.2_ASM155961v2_genomic.fna'
+gene_name = 'ysgA'
+seqid, start, end, strand, upstream_flank, downstream_flank, gene_seq = get_flanking_primers(gene_name,
+                                                                                             gff_file,
+                                                                                             reference_fasta)
+```
+
 ### Simple pools:
 Here you have a simple pool with only DNA sequences < 350nt.
 

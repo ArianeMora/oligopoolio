@@ -60,6 +60,7 @@ class TestPrimers(unittest.TestCase):
         print(f"Forward Gene Primer: 5'-{forward_gene_primer}-3' (Tm: {forward_tm:.2f} °C)")
         print(f"Reverse Gene Primer: 5'-{reverse_gene_primer}-3' (Tm: {reverse_tm:.2f} °C)")
 
+
     def test_get_flanking(self):
         gff_file = f'{test_data_dir}genome_NEB_B/genomic.gff'
         reference_fasta = f'{test_data_dir}genome_NEB_B/GCF_001559615.2_ASM155961v2_genomic.fna'

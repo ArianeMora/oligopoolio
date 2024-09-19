@@ -30,47 +30,6 @@ import pandas as pd
 u = SciUtil()
 
 
-def optimize_primer3(gene_sequence, upstream_seq='GAATTC', downstream_seq='CTCGAG', label='gene_cloning'):
-    """
-    https://www.qiagen.com/us/knowledge-and-support/knowledge-hub/bench-guide/pcr/introduction/pcr-primer-design
-    Args:
-        gene_sequence:
-        upstream_seq:
-        downstream_seq:
-        label:
-
-    Returns:
-
-    """
-    # Add restriction site sequences to your primers
-    forward_primer_seq = upstream_seq + gene_sequence[:18]  # EcoRI site by default
-    reverse_primer_seq = gene_sequence[-18:] + downstream_seq  # XhoI site by default, considering reverse complement
-
-    primer_config = {
-        'SEQUENCE_ID': label,
-        'SEQUENCE_TEMPLATE': forward_primer_seq + gene_sequence + reverse_primer_seq,
-        'SEQUENCE_INCLUDED_REGION': [0, len(forward_primer_seq + gene_sequence + reverse_primer_seq)],
-        'PRIMER_TASK': 'generic',
-        'PRIMER_PICK_LEFT_PRIMER': 1,
-        'PRIMER_PICK_INTERNAL_OLIGO': 0,
-        'PRIMER_PICK_RIGHT_PRIMER': 1,
-        'PRIMER_OPT_SIZE': 20,
-        'PRIMER_MIN_SIZE': 18,
-        'PRIMER_MAX_SIZE': 25,
-        'PRIMER_OPT_TM': 60.0,
-        'PRIMER_MIN_TM': 58.0,
-        'PRIMER_MAX_TM': 62.0,
-        'PRIMER_MIN_GC': 40.0,
-        'PRIMER_MAX_GC': 60.0,
-        'PRIMER_MAX_NS_ACCEPTED': 0,
-        'PRIMER_PRODUCT_SIZE_RANGE': [[len(gene_sequence) + 40, len(gene_sequence) + 100]]
-    }
-
-    # Design primers
-    results = primer3.bindings.designPrimers(primer_config)
-    return results
-
-
 def reverse(seq):
     """ Just reverse a sequence. """
     return reversed(seq)
@@ -260,3 +219,92 @@ https://benchling.com/arnold_lab/f/lib_yyMnf2lS-trpb_landscape/prt_kpSpRW0e-1-re
             gene_seq = gene_seq[upstream_flank_number: -downstream_flank_number]
 
     return seqid, start, end, strand, upstream_flank, downstream_flank, gene_seq
+
+
+def optimize_primer(plasmid_sequence, gene_sequence, desired_tm, direction, min_length=10, max_length=60,
+                    tm_tolerance=5, max_temp_deviation=20, his_tag=False):
+    """Optimize a primer sequence to achieve a desired Tm by adjusting its length."""
+
+    best_primer = 'None'
+    temp = 0
+    if direction == 'forward':
+        gene_sequence = gene_sequence
+    elif direction == 'reverse':
+        # Reverse comp it
+        gene_sequence = str(Seq(gene_sequence).reverse_complement())
+    else:
+        u.dp([f'Direction: {direction} is not an option, must be: forward or reverse.'])
+    if his_tag and direction == 'reverse':
+        min_length = min_length + 18  # 33  # i.e. the 18 of his tag + the seq
+    for primer_length in range(0, min_length, 3):
+        for length in range(min_length, max_length, 3):
+            plas_seq = plasmid_sequence[-1*(primer_length + 9):]
+            temp_primer = plas_seq + gene_sequence[:length]
+            tm = primer3.bindings.calcTm(temp_primer)
+            temp_deviation = abs(desired_tm - tm)
+            if temp_deviation < max_temp_deviation and temp_deviation < tm_tolerance and (temp_primer[-1] == 'C' or temp_primer[-1] == 'G'):
+                max_temp_deviation = temp_deviation
+                best_primer = plas_seq.lower() + gene_sequence[:length]
+                temp = tm
+    return best_primer, temp
+
+
+def make_primer(gene, max_length=60, min_length=15, tm_tolerance=30, desired_tm=62.0,
+                forward_primer='gaaataattttgtttaactttaagaaggagatatacat', reverse_primer='ctttgttagcagccggatc'):
+    # Standard pET-22b(+) primer sequences
+    forward_plasmid_primer = forward_primer.upper()  # Cut off a bit and then do the same for the tail
+    # Play with the length to get the melting but you can optimise for around 38 length --> Full GCTTTGTTAGCAG  --> CCGGATCTCA
+    reverse_plasmid_primer = reverse_primer.upper()
+    # Desired Tm range for optimization
+    # Target melting temperature in °C
+    # Generate and optimize forward primer
+    forward_gene_primer, forward_tm = optimize_primer(forward_plasmid_primer, gene, desired_tm, 'forward',
+                                                      min_length, max_length, tm_tolerance)
+    reverse_gene_primer, reverse_tm = optimize_primer(reverse_plasmid_primer, gene, desired_tm, 'reverse',
+                                                      min_length, max_length, tm_tolerance, his_tag=True)
+
+    print(f"Forward Gene Primer: 5'-{forward_gene_primer}-3' (Tm: {forward_tm:.2f} °C)")
+    print(f"Reverse Gene Primer: 3'-{reverse_gene_primer}-5' (Tm: {reverse_tm:.2f} °C)")
+    return forward_gene_primer, forward_tm, reverse_gene_primer, reverse_tm
+
+
+def make_primers_IDT(fasta_file, remove_stop_codon=True, his_tag='',
+                     max_length=60, min_length=15, tm_tolerance=30, desired_tm=62.0,
+                     forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                     reverse_primer='ctttgttagcagccggatc'):
+    """
+    optionally would set the his_tag to be: 'CACCACCACCACCACCAC'
+    # Note expects the stop codon to still be there since this gets removed and then the his tag added
+    """
+    seqs = {}
+    for record in SeqIO.parse(fasta_file, "fasta"):
+        try:
+            seq_id = str(record.id)
+            seqs[seq_id] = str(record.seq)
+        except:
+            print(record.description)
+    rows = []
+    for gene in seqs:
+        gene_seq = seqs.get(gene)
+        if remove_stop_codon:
+            gene_seq = gene_seq[: -3]
+        if his_tag:
+            gene_seq = gene_seq + his_tag
+        if gene_seq:
+            forward_gene_primer, forward_tm, reverse_gene_primer, reverse_tm = make_primer(gene_seq,
+                                                                                           max_length=max_length,
+                                                                                           min_length=min_length,
+                                                                                           tm_toleranc=tm_tolerance,
+                                                                                           desired_tm=desired_tm,
+                                                                                           forward_primer=forward_primer,
+                                                                                           reverse_primer=reverse_primer)
+            # Cut off the stop codon and add in the his Tag
+            rows.append([f'5F_{gene}', forward_gene_primer, '25nm', 'STD'])
+            rows.append([f'3R_{gene}', reverse_gene_primer, '25nm', 'STD'])
+            print(len(forward_gene_primer), len(reverse_gene_primer))
+        else:
+            print(gene)
+    primer_df = pd.DataFrame(rows)
+    primer_df.columns = ['Name', 'Sequence', 'Scale', 'Purification']
+    return primer_df
+
