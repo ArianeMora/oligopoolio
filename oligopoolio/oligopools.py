@@ -66,16 +66,24 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
             first_half = seq[:cut-overlap_len]
             second_half = seq[-cut+overlap_len:]
             overlap = seq[-cut-overlap_len:-cut+overlap_len].lower()
+            # Print out the tm
+            tm_1 = primer3.bindings.calcTm(first_half)
+            tm_2 = primer3.bindings.calcTm(second_half)
+            tm_overlap = primer3.bindings.calcTm(overlap)
+            u.dp(['TM of overlap:', tm_overlap])
             # Also reverse complement the overlap
             rev_comp_overlap = str(Seq(overlap).reverse_complement())
-            rows.append([seq_id + '_1', seq, 'first', overlap, rev_comp_overlap, f'{fwd}{first_half}{overlap}'])
-            rows.append([seq_id + '_2', seq, 'second', overlap, rev_comp_overlap, f'{overlap}{second_half}{bwd}'])
+            rows.append([seq_id + '_1', seq, 'first', overlap, rev_comp_overlap, f'{fwd}{first_half}{overlap}', tm_1,
+                         tm_overlap, f'{first_half}{overlap}{second_half}'])
+            rows.append([seq_id + '_2', seq, 'second', overlap, rev_comp_overlap, f'{overlap}{second_half}{bwd}', tm_2,
+                         tm_overlap, f'{first_half}{overlap}{second_half}'])
         else:
-            u.dp([seq_id, f'Issue: either did not have a methionine start or was longer than {max_len}. This has been omitted'])
+            u.dp([seq_id, f'Issue: either did not have a methionine start or was longer than {max_len}. '
+                          f'This has been omitted'])
                     
     # Now we want to drop any that are > 320 lengths 
     double_df = pd.DataFrame(rows)
-    double_df.columns = ['id', 'seq', 'label', 'overlap', 'rev_comp_overlap', 'oligo']
+    double_df.columns = ['id', 'seq', 'label', 'overlap', 'rev_comp_overlap', 'oligo', 'tm_part', 'tm_overlap', 'insert']
     return double_df
 
 

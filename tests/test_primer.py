@@ -137,6 +137,15 @@ class TestPrimers(unittest.TestCase):
                           max_len=640,
                           overlap_len=9)
 
+    def test_double_oligo_run(self):
+        fasta_file = f'/Users/arianemora/Documents/code/degradeo/manuscript/data/oligopool_random_forest.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_oligo_double(fasta_file, forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=15, reverse_primer='gatccggctgctaacaaag', reverse_primer_len=15,
+                               max_len=670,
+                               overlap_len=24)
+        df.to_csv('/Users/arianemora/Documents/code/degradeo/manuscript/data/order_oligopool_random_forest_NT_SwissProt_prediction_DEHP_25092024.csv', index=False)
+
 
 
 
