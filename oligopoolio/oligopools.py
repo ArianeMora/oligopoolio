@@ -19,7 +19,7 @@
 Author: Ariane Mora
 Date: September 2024
 """
-
+import math
 import os
 import pysam
 from collections import defaultdict
@@ -62,10 +62,13 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
         seq_id = r.id
         seq = str(r.seq)
         if seq[:3] == 'ATG' and len(seq) < max_len:
-            cut = int(len(seq)/2)
+            cut = len(seq)//2
             first_half = seq[:cut-overlap_len]
-            second_half = seq[-cut+overlap_len:]
-            overlap = seq[-cut-overlap_len:-cut+overlap_len].lower()
+            if len(seq) % 2 == 0:
+                second_half = seq[-cut+overlap_len:]
+            else:
+                second_half = seq[-cut + overlap_len - 1:]
+            overlap = seq[cut-overlap_len:cut+overlap_len].lower()
             # Print out the tm
             tm_1 = primer3.bindings.calcTm(first_half)
             tm_2 = primer3.bindings.calcTm(second_half)

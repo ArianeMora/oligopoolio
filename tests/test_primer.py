@@ -146,6 +146,21 @@ class TestPrimers(unittest.TestCase):
                                overlap_len=24)
         df.to_csv('/Users/arianemora/Documents/code/degradeo/manuscript/data/order_oligopool_random_forest_NT_SwissProt_prediction_DEHP_25092024.csv', index=False)
 
+    def test_double_oligo_run_v2(self):
+        # Read in a csv and then convert to fasta
+        df = pd.read_csv('~/Documents/oligo_seq_order_metagenomics.csv')
+        # save the seqs to a fasta file here
+        with open('oligo_seq_order_metagenomics.fasta', 'w+') as fout:
+            for seq_name, seq in df[['sequence_name', 'codon_optiimized']].values:
+                fout.write(f'>{seq_name}\n{seq}\n')
+        fasta_file = f'oligo_seq_order_metagenomics.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_oligo_double(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=46, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=24)
+        df.to_csv('oligo_seq_order_metagenomics_order.csv', index=False)
 
 
 
