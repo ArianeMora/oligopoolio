@@ -78,7 +78,8 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
             rev_comp_overlap = str(Seq(overlap).reverse_complement())
             rows.append([seq_id + '_1', seq, 'first', overlap, rev_comp_overlap, f'{fwd}{first_half}{overlap}', tm_1,
                          tm_overlap, f'{first_half}{overlap}{second_half}'])
-            rows.append([seq_id + '_2', seq, 'second', overlap, rev_comp_overlap, f'{overlap}{second_half}{bwd}', tm_2,
+            rows.append([seq_id + '_2', seq, 'second', overlap, rev_comp_overlap,
+                         str(Seq(f'{overlap}{second_half}{bwd}').reverse_complement()), tm_2,
                          tm_overlap, f'{first_half}{overlap}{second_half}'])
         else:
             u.dp([seq_id, f'Issue: either did not have a methionine start or was longer than {max_len}. '
