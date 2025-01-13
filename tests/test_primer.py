@@ -178,7 +178,70 @@ class TestPrimers(unittest.TestCase):
                                overlap_len=24)
         df.to_csv('oligo_seq_order_metagenomics_order_rev_comp_2.csv', index=False)
 
+    def test_double_oligo_TWIST_thermofiles(self):
+        # # Read in a csv and then convert to fasta
+        df = pd.read_csv('~/Documents/optimized_thermofiles.csv')
+        # save the seqs to a fasta file here
+        with open('optimized_thermofiles.fasta', 'w+') as fout:
+            for seq_name, seq in df[['Name', 'Optimized Sequence']].values:
+                print(len(seq))
+                fout.write(f'>{seq_name}\n{seq}\n')
+        fasta_file = f'optimized_thermofiles.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_oligo_double(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=46, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=900,
+                               overlap_len=24)
+        df.to_csv('oligo_seq_order_optimized_thermofiles_order_rev_comp_2.csv', index=False)
+
+    def test_double_oligo_TWIST(self):
+        fasta_file = f'oligo_seq_order_metagenomics.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_oligo_double(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=38, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=18)
+        df.to_csv('oligo_seq_order_metagenomics_double.csv', index=False)
+    def test_double_oligo_many(self):
+        fasta_file = f'oligo_seq_order_metagenomics.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_splitty_oligo(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=38, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=18)
+        df.to_csv('oligo_seq_order_metagenomics_splitty.csv', index=False)
+
+    def test_multi_oligo_rxnfp_chai(self):
+        df = pd.read_csv('../predictions_rxnfp_chai/all-sequences.csv')
+        # save the seqs to a fasta file here
+        with open('../predictions_rxnfp_chai/optimized_rxnfp.fasta', 'w+') as fout:
+            for seq_name, seq in df[['Name', 'Full Optimized Sequence']].values:
+                fout.write(f'>{seq_name}\n{seq}\n')
+        fasta_file = '../predictions_rxnfp_chai/optimized_rxnfp.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_splitty_oligo(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=38, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=18)
+        df.to_csv('../predictions_rxnfp_chai/oligo_seq_order_rxnfp_splitty.csv', index=False)
 
 
+    def test_double_oligo_rxnfp_chai(self):
+        df = pd.read_csv('../predictions_rxnfp_chai/all-sequences.csv')
+        # save the seqs to a fasta file here
+        with open('../predictions_rxnfp_chai/optimized_rxnfp_noTAA.fasta', 'w+') as fout:
+            for seq_name, seq in df[['Name', 'Optimized Sequence']].values:
+                fout.write(f'>{seq_name}\n{seq}\n')
+        fasta_file = '../predictions_rxnfp_chai/optimized_rxnfp_noTAA.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
 
+        df = make_oligo_double(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat',
+                               forward_primer_len=38, reverse_primer='CTCGAGCACCACCACCACCACCACTGAgatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=18)
+        df.to_csv('../predictions_rxnfp_chai/oligo_seq_order_rxnfp_double.csv', index=False)
 

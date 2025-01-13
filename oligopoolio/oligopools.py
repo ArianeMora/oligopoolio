@@ -91,6 +91,66 @@ def make_oligo_double(codon_optimized_fasta, forward_primer='gaaataattttgtttaact
     return double_df
 
 
+def make_splitty_oligo(codon_optimized_fasta, forward_primer='gaaataattttgtttaactttaagaaggagatatacat',
+                       forward_primer_len=15, reverse_primer='gatccggctgctaacaaag',
+                       reverse_primer_len=15, max_len=640, max_part_len=100, overlap_len=18):
+    records = list(SeqIO.parse(codon_optimized_fasta, "fasta"))
+    rows = []
+    fwd = forward_primer[-1 * forward_primer_len - 1:]
+    bwd = reverse_primer[:reverse_primer_len]
+    for r in records:
+        seq_id = r.id
+        seq = fwd + str(r.seq)
+        print(seq[-10:])
+        if seq[-3:] == 'TAA':
+            print('Stop codon removed...')
+            seq = seq[:-3]
+            print(seq[-10:])
+        # Basically get the splits size
+        total_seq = fwd + seq + bwd
+        # get the number of splits
+        num_splits = int(len(total_seq) // max_part_len)
+        # Make sure it is even...
+        if num_splits % 2 != 0:
+            num_splits += 1
+        reverse = False
+        prev_overlap = ''
+        for i in range(0, num_splits):
+            cut = max_part_len * (i + 1)
+            prev_cut = max_part_len * i
+            if cut + max_part_len >= len(total_seq):
+                oligo = seq[prev_cut:]
+                # Add the backwards last bit on
+                if not reverse:
+                    # Forward
+                    rows.append([seq_id + '_end', 'forward_end', f'{oligo}{bwd}', prev_cut, cut, prev_overlap, bwd, oligo])
+                    reverse = True
+                elif reverse:
+                    # reverse
+                    rev_comp = str(Seq(f'{oligo}{bwd}').reverse_complement())
+                    rows.append([seq_id + '_end', 'reverse_end', rev_comp, prev_cut, cut, prev_overlap, bwd, oligo])
+                    reverse = False
+            else:
+                oligo = seq[prev_cut + 1:cut]
+                next_overlap = seq[cut:cut + overlap_len]
+                # Also reverse complement the overlap
+                if not reverse:
+                    # Forward
+                    rows.append([seq_id + '_' + str(i), 'forward', f'{oligo}{next_overlap}', prev_cut, cut, prev_overlap, next_overlap, oligo])
+                    reverse = True
+                elif reverse:
+                    # reverse
+                    rev_comp = str(Seq(f'{oligo}{next_overlap}').reverse_complement())
+                    rows.append([seq_id + '_' + str(i), 'reverse', rev_comp, prev_cut, cut, prev_overlap, next_overlap, oligo])
+                    reverse = False
+                prev_overlap = next_overlap
+
+        # Now we want to drop any that are > 320 lengths
+    double_df = pd.DataFrame(rows)
+    double_df.columns = ['id', 'label', 'oligo', 'prev_cut', 'cut', 'prev_overlap', 'next_overlap', 'oligo']
+    return double_df
+
+
 # Take the demultiplexed files from a LevSeq run and then demultiplex oligoPools from these
 
 def alignment_from_cigar(cigar: str, alignment: str, ref: str, query_qualities: list):
