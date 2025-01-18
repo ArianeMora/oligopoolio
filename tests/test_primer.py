@@ -230,6 +230,22 @@ class TestPrimers(unittest.TestCase):
         df.to_csv('../predictions_rxnfp_chai/oligo_seq_order_rxnfp_splitty.csv', index=False)
 
 
+    def test_multi_oligo_rxnfp_chai_thermo(self):
+        df = pd.read_csv('../predictions_rxnfp_chai/codon_optimized_creep_predictions_thermofiles/optimized.csv')
+        # save the seqs to a fasta file here
+        with open('../predictions_rxnfp_chai/codon_optimized_creep_predictions_thermofiles/optimized_chemberta.fasta', 'w+') as fout:
+            for seq_name, seq in df[['Name', 'Optimized Sequence']].values:
+                fout.write(f'>{seq_name}\n{seq}\n')
+        fasta_file = '../predictions_rxnfp_chai/codon_optimized_creep_predictions_thermofiles/optimized_chemberta.fasta' #oligopool_random_forest_NT_SwissProt_ActiveSite_prediction_DEHP_25092024.txt'
+
+        df = make_splitty_oligo(fasta_file, forward_primer='cccctctagaaataattttgtttaactttaagaaggagatatacat', # CTCGAGCACCACCACCACCACCACTGA
+                               forward_primer_len=38, reverse_primer='gatccggctgctaacaaag',
+                               reverse_primer_len=46,
+                               max_len=670,
+                               overlap_len=18)
+        df.to_csv('../predictions_rxnfp_chai/codon_optimized_creep_predictions_thermofiles_splitty.csv', index=False)
+
+
     def test_double_oligo_rxnfp_chai(self):
         df = pd.read_csv('../predictions_rxnfp_chai/all-sequences.csv')
         # save the seqs to a fasta file here
