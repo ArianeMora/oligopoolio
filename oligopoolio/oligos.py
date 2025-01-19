@@ -234,7 +234,6 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
             if 'TAA' not in reverse_primer and "TGA" not in reverse_primer and "TAG" not in reverse_primer:
                 u.warn_p([f"Warning: {seq_id} does not end with a stop codon. AND you don't have a stop codon in your primer!!", reverse_primer])
                 print("We expect the primer to be in 5 to 3 prime direction.")
-        print(optimzed_sequence)
         codon_optimized_sequence = forward_primer + optimzed_sequence + reverse_primer
         # Check now some simple things like that there is 
         oligos = build_oligos(seq_id, codon_optimized_sequence, output_directory, min_gc, max_gc, min_tm, max_tm, min_segment_length, max_segment_length, max_length)
@@ -291,6 +290,12 @@ def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
         constraints=[
             AvoidPattern("BsaI_site"),
             EnforceGCContent(mini=min_gc, maxi=max_gc, window=50),
+            EnforceTranslation(location=(0, len(seq))), 
+            AvoidStopCodons(
+                genetic_code="Standard",
+                locations=[(0, len(seq))],  # Avoid stop codons only in the first 30 bases
+                boost=1.5  # Increase the priority of this constraint
+            )
         ],
         objectives=[CodonOptimize(species='e_coli', location=(0, len(seq)))]
     )
@@ -305,5 +310,7 @@ def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
     # GET THE FINAL SEQUENCE (AS STRING OR ANNOTATED BIOPYTHON RECORDS)
     final_sequence = problem.sequence  # string
     final_record = problem.to_record(with_sequence_edits=True)
+    print(protein_sequence)
+    print(final_sequence)
     return final_sequence
 
