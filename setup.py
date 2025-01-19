@@ -62,6 +62,10 @@ setup(name='oligopoolio',
           ]
       },
       install_requires=['scikit-learn',
+                        'dnaweaver',
+                        'dnachisel',
+                        'pdf_reports',
+                        
                         'sciutil',
                         'seaborn',
                         'statsmodels',

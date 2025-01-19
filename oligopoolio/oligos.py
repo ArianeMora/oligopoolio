@@ -5,11 +5,106 @@ from sciutil import SciUtil
 from Bio.Seq import Seq
 from difflib import SequenceMatcher
 import primer3
+from Bio import SeqIO
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+import pandas as pd
+
 
 u = SciUtil()
 
 from primer3 import calcHairpin, calcHomodimer
 
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+
+def insert_sequence_with_translation(input_file, output_file, insert_position, new_sequence, translation_label, reverse=False):
+    """
+    Insert a new sequence at a specific position in a GenBank file, add a translation annotation,
+    and adjust existing annotations to avoid overlap.
+
+    Args:
+        input_file (str): Path to the original GenBank file.
+        output_file (str): Path to save the modified GenBank file.
+        insert_position (int): Position to insert the new sequence (0-based).
+        new_sequence (str): The DNA sequence to insert.
+        translation_label (str): Label for the translation feature.
+        reverse (bool): Whether the feature should be on the reverse strand.
+    """
+    # Read the original GenBank file
+    record = SeqIO.read(input_file, "genbank")
+    
+    # Insert the new sequence at the specified position
+    if reverse:
+        new_sequence = str(Seq(new_sequence).reverse_complement())  # Reverse complement the sequence if needed
+    record.seq = record.seq[:insert_position] + Seq(new_sequence) + record.seq[insert_position:]
+    
+    # Adjust existing annotations to avoid overlap
+    inserted_length = len(new_sequence)
+    for feature in record.features:
+        if feature.location.start >= insert_position:
+            feature.location = FeatureLocation(
+                feature.location.start + inserted_length,
+                feature.location.end + inserted_length,
+                strand=feature.location.strand
+            )
+    
+    # Create the feature label
+    strand_label = " (reverse)" if reverse else " (forward)"
+    full_label = translation_label + strand_label
+    
+    # Add a feature for the inserted sequence
+    start = insert_position
+    end = insert_position + len(new_sequence)
+    feature = SeqFeature(
+        location=FeatureLocation(start, end, strand=-1 if reverse else 1),
+        type="CDS",  # CDS type for coding sequences
+        qualifiers={
+            "label": full_label,
+            "translation": Seq(new_sequence).translate(table=11)  # Translation for the sequence
+        }
+    )
+    record.features.append(feature)
+    # Save the modified GenBank file
+    if output_file:
+        SeqIO.write(record, output_file, "genbank")
+        print(f"Updated GenBank file saved as {output_file}")
+    
+    return record
+
+def insert_features_from_oligos(record, seq_id, seq, strand, tm, output_file):
+    """
+    Insert features into a GenBank file based on oligo_df.
+
+    Args:
+        genbank_file (str): Path to the original GenBank file.
+        output_file (str): Path to save the updated GenBank file.
+        oligo_df (pd.DataFrame): DataFrame with oligo information. 
+                                 Expected columns: ['id', 'oligo_id', 'oligo_sequence', 'oligo_length', ...].
+    """
+    # Iterate through the oligo DataFrame to add features
+    start = record.seq.find(seq.upper())
+    if start == -1:
+        print(f"Warning: Oligo sequence {seq_id} not found in the GenBank sequence.")
+    
+    end = start + len(seq)
+    feature = SeqFeature(
+        location=FeatureLocation(start, end, strand=strand),
+        type="misc_feature",
+        qualifiers={
+            "label": f"{seq_id} {'(reverse)' if strand == -1 else '(forward)'}",
+            "note": f"Length: {len(seq)}, TM: {tm}"
+        }
+    )
+    record.features.append(feature)
+    
+    # Save the updated GenBank file
+    if output_file:
+        SeqIO.write(record, output_file, "genbank")
+        print(f"Updated GenBank file saved as {output_file}")
+    return record
+    
 def check_secondary_structure(sequence):
     """
     Check secondary structures like hairpins and homodimers in a given primer sequence.
@@ -102,7 +197,7 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
     t0 = time.time()
     quote = assembly_station.get_quote(sequence, with_assembly_plan=True)
     assembly_plan_report = quote.to_assembly_plan_report()
-    #assembly_plan_report.write_full_report(f"{output_directory}/oligo_assembly_plan_{seq_id}.zip")
+    assembly_plan_report.write_full_report(f"{output_directory}/oligo_assembly_plan_{seq_id}.zip")
     original_sequence = assembly_plan_report.plan.sequence
     # Then get the sequence 
     rows = []
@@ -112,13 +207,22 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
             rows.append([oligo.id, oligo.sequence, original_sequence])
     return rows
 
-def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, min_overlap=10, min_gc=0.3, 
-               max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=40, max_segment_length=100, max_length=1500):
-    """ Get the oligos for a dataframe """
+def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
+               max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=40, max_segment_length=100, max_length=1500, genbank_file=None, 
+               insert_position=0):
+    """ Get the oligos for a dataframe:
+    sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
+    """
     rows = []   
     for seq_id, protein_sequence in df[[id_column, protein_column]].values:
         # Add on the primers that the user has provided
-        optimzed_sequence = codon_optimize(protein_sequence, min_gc, max_gc)
+        optimzed_sequence = codon_optimize(protein_sequence, min_gc, max_gc) + sequence_end
+        if genbank_file:
+            # Add in the optimzed sequence
+            translation_label = f"Insert_{seq_id}"
+            reverse = False  # Set to True for reverse feature, False for forward
+            record = insert_sequence_with_translation(genbank_file, None, insert_position, optimzed_sequence, translation_label, reverse)
+            
         if optimzed_sequence[:3] != "ATG":
             u.dp([f"Warning: {seq_id} does not start with a methionine. ", optimzed_sequence[:3]])
             if 'ATG' not in forward_primer:
@@ -135,6 +239,8 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
         # Check now some simple things like that there is 
         oligos = build_oligos(seq_id, codon_optimized_sequence, output_directory, min_gc, max_gc, min_tm, max_tm, min_segment_length, max_segment_length, max_length)
         prev_oligo = None
+        # If a genbank file was provided also just add in the new sequnece
+        
         for i, oligo in enumerate(oligos):
             seq = oligo[1]
             # CHeck that there is an overlap with the previous sequence and that it is not too short
@@ -155,13 +261,26 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 hairpin_tm = results['hairpin']['hairpin_tm']
                 primer_tm = primer3.bindings.calcTm(primer_overlap)
                 primer_len = len(primer_overlap)
+
             prev_oligo = seq
+            orig_seq = seq
+            strand = 1
             if i % 2 == 0:
                 seq = str(Seq(seq).reverse_complement())
+                strand = -1
             oligo_tm = primer3.bindings.calcTm(seq)
+            if genbank_file:
+                insert_features_from_oligos(record, f"{seq_id}_oligo_{i}", orig_seq, strand, oligo_tm, None)
             rows.append([seq_id, oligo[0], seq, len(seq), oligo_tm, primer_overlap, primer_tm, primer_len, homodimer_tm, hairpin_tm, oligo[2]])
+        if genbank_file:
+            output_file = genbank_file.replace('.', f'_{seq_id}.')
+            SeqIO.write(record, f'{output_directory}/{output_file}', "genbank")
+        print(f"Updated GenBank file saved as {output_file}")
+        
     oligo_df = pd.DataFrame(rows, columns=["id", "oligo_id", "oligo_sequence", "oligo_length", "oligo_tm", "primer_overlap_with_previous", "overlap_tm_5prime", "overlap_length", 
                                             "overlap_homodimer_tm", "overlap_hairpin_tm", "original_sequence"])
+    
+        
     return oligo_df
 
 def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
