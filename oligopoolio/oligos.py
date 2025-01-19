@@ -8,7 +8,7 @@ import primer3
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 import pandas as pd
-
+import math
 
 u = SciUtil()
 
@@ -105,7 +105,7 @@ def insert_features_from_oligos(record, seq_id, seq, strand, tm, output_file):
         print(f"Updated GenBank file saved as {output_file}")
     return record
     
-def check_secondary_structure(sequence):
+def check_secondary_structure(sequence, temp=55):
     """
     Check secondary structures like hairpins and homodimers in a given primer sequence.
     
@@ -116,22 +116,22 @@ def check_secondary_structure(sequence):
         dict: Results for hairpin and homodimer properties.
     """
     # Check for hairpin structure
-    hairpin_result = calcHairpin(sequence)
+    hairpin_result = calcHairpin(sequence, temp_c=temp)
     hairpin_info = {
         "hairpin_found": hairpin_result.structure_found,
         "hairpin_tm": hairpin_result.tm,
-        "hairpin_dg": hairpin_result.dg,
-        "hairpin_dh": hairpin_result.dh,
+        "hairpin_dg": hairpin_result.dg/1000,
+        "hairpin_dh": hairpin_result.dh/1000,
         "hairpin_ds": hairpin_result.ds,
     }
 
     # Check for homodimer structure
-    homodimer_result = calcHomodimer(sequence)
+    homodimer_result = calcHomodimer(sequence, temp_c=temp)
     homodimer_info = {
         "homodimer_found": homodimer_result.structure_found,
         "homodimer_tm": homodimer_result.tm,
-        "homodimer_dg": homodimer_result.dg,
-        "homodimer_dh": homodimer_result.dh,
+        "homodimer_dg": homodimer_result.dg/1000,
+        "homodimer_dh": homodimer_result.dh/1000,
         "homodimer_ds": homodimer_result.ds,
     }
 
@@ -209,7 +209,7 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
 
 def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
                max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=40, max_segment_length=100, max_length=1500, genbank_file=None, 
-               insert_position=0):
+               insert_position=0, simple=False):
     """ Get the oligos for a dataframe:
     sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
     """
@@ -236,7 +236,10 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 print("We expect the primer to be in 5 to 3 prime direction.")
         codon_optimized_sequence = forward_primer + optimzed_sequence + reverse_primer
         # Check now some simple things like that there is 
-        oligos = build_oligos(seq_id, codon_optimized_sequence, output_directory, min_gc, max_gc, min_tm, max_tm, min_segment_length, max_segment_length, max_length)
+        if simple:
+            oligos = build_simple_oligos(seq_id, codon_optimized_sequence, min_segment_length, max_segment_length)
+        else:
+            oligos = build_oligos(seq_id, codon_optimized_sequence, output_directory, min_gc, max_gc, min_tm, max_tm, min_segment_length, max_segment_length, max_length)
         prev_oligo = None
         # If a genbank file was provided also just add in the new sequnece
         
@@ -256,8 +259,8 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 primer_overlap = prev_oligo[match.a:match.a + match.size]
                 # Analyze the primer sequence
                 results = check_secondary_structure(primer_overlap)
-                homodimer_tm = results['homodimer']['homodimer_tm']
-                hairpin_tm = results['hairpin']['hairpin_tm']
+                homodimer_tm = results['homodimer']['homodimer_dg']
+                hairpin_tm = results['hairpin']['hairpin_dg']
                 primer_tm = primer3.bindings.calcTm(primer_overlap)
                 primer_len = len(primer_overlap)
 
@@ -277,10 +280,53 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
         print(f"Updated GenBank file saved as {output_file}")
         
     oligo_df = pd.DataFrame(rows, columns=["id", "oligo_id", "oligo_sequence", "oligo_length", "oligo_tm", "primer_overlap_with_previous", "overlap_tm_5prime", "overlap_length", 
-                                            "overlap_homodimer_tm", "overlap_hairpin_tm", "original_sequence"])
+                                            "overlap_homodimer_dg", "overlap_hairpin_dg", "original_sequence"])
     
         
     return oligo_df
+
+
+def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=40, max_segment_length=100):
+    # Basically get the splits size
+    seq_len = len(sequence)
+    num_splits = int(math.floor(seq_len / max_segment_length))
+    # Make sure it is even
+    if num_splits % 2 != 0:
+        num_splits += 1
+    
+    remainder = seq_len % num_splits
+    # Check if there is a remainder, if so we need to add one to the splits and then share the new remainder 
+    if remainder > 0:
+        num_splits += 1
+        remainder = seq_len % num_splits
+    
+    reverse = True
+    prev_overlap = ''
+    # Now we want to go through the new part length and while remainder is greater then 0 we distribute this across the splits
+    max_part_len = math.floor(seq_len/num_splits)
+    split_counts = {}
+    for i in range(0, num_splits):
+        split_counts[i] = max_part_len
+    # Now distribute the remainder
+    split_count = 0
+    for i in range(0, remainder):
+        split_counts[split_count] += 1
+        split_count += 1
+        # Iterate through this again
+        if split_count == num_splits:
+            split_count = 0
+    prev_cut = 0
+    rows = []
+    print(split_counts)
+    for i in split_counts:
+        part_len = split_counts[i]
+        cut = prev_cut + part_len
+        oligo = sequence[prev_cut:cut]
+        print(prev_cut, part_len, cut, oligo)
+        rows.append([f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+        prev_cut = cut
+    return rows
+
 
 def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
     """ Codon optimize the protein sequence using DNA chisel: https://github.com/Edinburgh-Genome-Foundry/DnaChisel"""
@@ -292,10 +338,7 @@ def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
             EnforceGCContent(mini=min_gc, maxi=max_gc, window=50),
             EnforceTranslation(location=(0, len(seq))), 
             AvoidStopCodons(
-                genetic_code="Standard",
-                locations=[(0, len(seq))],  # Avoid stop codons only in the first 30 bases
-                boost=1.5  # Increase the priority of this constraint
-            )
+                location=(0, len(seq)-3)) # Let there be stop codons in the last bit
         ],
         objectives=[CodonOptimize(species='e_coli', location=(0, len(seq)))]
     )
