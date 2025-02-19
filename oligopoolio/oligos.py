@@ -214,14 +214,19 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
 
 def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
                max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=40, max_segment_length=100, max_length=1500, genbank_file=None, 
-               insert_position=0, simple=False):
+               insert_position=0, simple=False, codon_optimize=True):
     """ Get the oligos for a dataframe:
     sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
     """
     rows = []   
     for seq_id, protein_sequence in df[[id_column, protein_column]].values:
         # Add on the primers that the user has provided
-        optimzed_sequence = codon_optimize(protein_sequence, min_gc, max_gc) + sequence_end
+        if codon_optimize:
+            optimzed_sequence = codon_optimize(protein_sequence, min_gc, max_gc) + sequence_end
+        else:
+            optimzed_sequence = protein_sequence + sequence_end
+            u.dp([f"Added sequence end with HIS and stop to: {seq_id}, {sequence_end}"])
+
         if genbank_file:
             # Add in the optimzed sequence
             translation_label = f"Insert_{seq_id}"
