@@ -11,6 +11,21 @@ conda activate oligo
 pip install oligopoolio
 ```
 
+## Quick start
+```
+df = pd.read_csv('file_with_genes.csv')
+# forward primer = 'gaaataattttgtttaactttaagaaggagatatacat' --> part of my backbone
+# reverse primer = 'GATCCGGC' --> part of my backbone at the 3' end
+# sequence_end = 'CTCGAGCACCACCACCACCACCACTGA' --> I add this on since I don't have a his or stop codon on my seqs
+oligo_df = get_oligos(df, 'CodonOptimized', 'Entry', output_directory, 'gaaataattttgtttaactttaagaaggagatatacat', 'GATCCGGC', 
+                    sequence_end='CTCGAGCACCACCACCACCACCACTGA',
+                     min_gc=0.25, max_gc=0.65, min_tm=10, max_tm=10000, min_segment_length=20, max_segment_length=100,
+                     genbank_file="base-pet22b-base-anm.gb", insert_position=5193, codon_optimize=False)
+oligo_df.to_csv('oligos_DNAWeaver.csv', index=False)
+```
+This is the backbone I'm putting it into: `base-pet22b-base-anm.gb`.
+This will output a csv file with the oligos and also all the genes cut into oligos put into the supplied backbone.
+
 ### Dependencies 
 None outside python for the primer generation.  
 

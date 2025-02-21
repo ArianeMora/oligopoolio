@@ -65,7 +65,6 @@ setup(name='oligopoolio',
                         'dnaweaver',
                         'dnachisel',
                         'pdf_reports',
-                        
                         'sciutil',
                         'seaborn',
                         'statsmodels',
