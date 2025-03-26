@@ -13,15 +13,29 @@ pip install oligopoolio
 
 ## Quick start
 ```
-df = pd.read_csv('file_with_genes.csv')
-# forward primer = 'gaaataattttgtttaactttaagaaggagatatacat' --> part of my backbone
-# reverse primer = 'GATCCGGC' --> part of my backbone at the 3' end
-# sequence_end = 'CTCGAGCACCACCACCACCACCACTGA' --> I add this on since I don't have a his or stop codon on my seqs
-oligo_df = get_oligos(df, 'CodonOptimized', 'Entry', output_directory, 'gaaataattttgtttaactttaagaaggagatatacat', 'GATCCGGC', 
-                    sequence_end='CTCGAGCACCACCACCACCACCACTGA',
-                     min_gc=0.25, max_gc=0.65, min_tm=10, max_tm=10000, min_segment_length=20, max_segment_length=100,
-                     genbank_file="base-pet22b-base-anm.gb", insert_position=5193, codon_optimize=False)
-oligo_df.to_csv('oligos_DNAWeaver.csv', index=False)
+from oligopoolio.oligos import get_oligos
+SEED = 128
+random.seed(SEED)
+numpy.random.seed(SEED)
+
+min_gc = 0.25
+max_gc = 0.65
+min_tm = 10
+max_tm = 1000
+min_segment_length = 90
+max_segment_length = 130
+max_length = 500
+
+df = pd.read_csv('AS_inference_ML_codon_optimized.csv')
+# Note you need to add in the reverse primer to the end of the sequence i.e. you add on the sequence that is the end
+primer_lower = 'GATCCGGC'.lower()
+output_directory = '.'
+
+oligo_df = get_oligos(df, 'CodonOptimized', 'id', output_directory, 'gaaataattttgtttaactttaagaaggagatatacat', primer_lower, sequence_end='CTCGAGCACCACCACCACCACCACTGA',
+                     min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm, min_segment_length=min_segment_length, max_segment_length=max_segment_length,
+                     genbank_file="base-pet22b-base-anm.gb", insert_position=5193, simple=True, codon_optimize=False)
+oligo_df.to_csv(f'oligos_simple.csv', index=False)
+
 ```
 This is the backbone I'm putting it into: `base-pet22b-base-anm.gb`.
 This will output a csv file with the oligos and also all the genes cut into oligos put into the supplied backbone.
