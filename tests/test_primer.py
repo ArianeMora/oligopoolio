@@ -17,6 +17,7 @@
 
 from oligopoolio.oligopools import *
 from oligopoolio.primers import *
+from oligopoolio.oligos import *
 
 import unittest
 from sciutil import *
@@ -260,4 +261,27 @@ class TestPrimers(unittest.TestCase):
                                max_len=670,
                                overlap_len=18)
         df.to_csv('../predictions_rxnfp_chai/oligo_seq_order_rxnfp_double.csv', index=False)
+
+
+    def test_long_oligos(self):
+        df = pd.read_csv('../scripts/degradeo/predictions_PBP_12042025/pbp_codon_optimized_no_spaces_5.csv')
+
+        min_gc = 0.25
+        max_gc = 0.65
+        min_tm = 10
+        max_tm = 1000
+        min_segment_length = 200
+        max_segment_length = 250
+        max_length = 500
+        primer_lower = 'GATCCGGC'.lower()
+
+        output_directory = 'output_long/'
+        oligo_df = get_oligos(df, 'Optimized Sequence', 'Name', output_directory,
+                              'gaaataattttgtttaactttaagaaggagatatacat',
+                              primer_lower, sequence_end='CTCGAGCACCACCACCACCACCACTGA',
+                              min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm,
+                              min_segment_length=min_segment_length,
+                              max_segment_length=max_segment_length,
+                              genbank_file="../scripts/degradeo/predictions_PBP_12042025/base-pet22b-base-anm.gb", insert_position=5193, simple=True,
+                              codon_optimize=False)
 

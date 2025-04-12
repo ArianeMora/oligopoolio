@@ -37,6 +37,7 @@ oligo_df = get_oligos(df, 'CodonOptimized', 'id', output_directory, 'gaaataatttt
 oligo_df.to_csv(f'oligos_simple.csv', index=False)
 
 ```
+
 This is the backbone I'm putting it into: `base-pet22b-base-anm.gb`.
 This will output a csv file with the oligos and also all the genes cut into oligos put into the supplied backbone.
 

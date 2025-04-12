@@ -19,6 +19,9 @@
 Author: Ariane Mora
 Date: 24th March 2024
 """
+import random
+import string
+from tqdm import tqdm
 
 from Bio.Seq import Seq
 import primer3
@@ -309,3 +312,17 @@ def make_primers_IDT(fasta_file, remove_stop_codon=True, his_tag='',
     primer_df.columns = ['Name', 'Sequence', 'Scale', 'Purification']
     return primer_df
 
+def generate_random_primer(length):
+    letters = ['A', 'T', 'G', 'C']  # Includes both lowercase and uppercase letters
+    result = ''.join(random.choice(letters) for i in range(length))
+    return result
+def get_high_tm_primers(length_min, length_max, optimal_tm, number_primers, num_samples=1000):
+    rows = []
+    for i in tqdm(range(length_min, length_max)):
+        # Create num_samples primers of this length
+        for j in range(num_samples):
+            primer = generate_random_primer(i)
+            primer_tm = primer3.bindings.calcTm(primer)
+            rows.append([primer, primer_tm, abs(optimal_tm - primer_tm), i])
+    df = pd.DataFrame(rows, columns=['Primer', 'Tm', 'Tm_diff', 'Length'])
+    return df.sort_values(by=['Tm_diff']).head(number_primers)

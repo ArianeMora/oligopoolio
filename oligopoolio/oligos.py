@@ -251,10 +251,8 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
             oligos = build_simple_oligos(seq_id, codon_optimized_sequence, min_segment_length, max_segment_length)
         else:
             oligos = build_oligos(seq_id, codon_optimized_sequence, output_directory, min_gc, max_gc, min_tm, max_tm, min_segment_length, max_segment_length, max_length)
-        # except Exception as e:
-        #     u.warn_p([f"Warning: {seq_id} did not have any oligos built. ", e])
-        #     oligos = []
         prev_oligo = None
+        prev_overlap = None
         # If a genbank file was provided also just add in the new sequnece
         if len(oligos) > 0:
             for i, oligo in enumerate(oligos):
@@ -262,24 +260,28 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 # CHeck that there is an overlap with the previous sequence and that it is not too short
                 # Also make sure we swap the directions of the oligos so they automatically anneal
                 # Also assert that the start is a methionine (and if not warn it... )
-                primer_overlap = None
                 primer_tm = None
                 primer_len = None
                 homodimer_tm = None
                 hairpin_tm = None
+                primer_overlap = prev_overlap
                 if prev_oligo:
                     # Get the overlap with the previous sequence
-                    match = SequenceMatcher(None, prev_oligo, seq).find_longest_match()
-                    primer_overlap = prev_oligo[match.a:match.a + match.size]
+                    #match = SequenceMatcher(None, prev_oligo, seq).find_longest_match()
+                    #primer_overlap = prev_oligo[match.a:match.a + match.size]
+                    #if primer_overlap != prev_overlap:
+                    # print(prev_overlap, primer_overlap)
+                    # print(prev_oligo)
+                    # print(seq)
                     # Analyze the primer sequence
                     results = check_secondary_structure(primer_overlap)
                     homodimer_tm = results['homodimer']['homodimer_dg']
                     hairpin_tm = results['hairpin']['hairpin_dg']
                     primer_tm = primer3.bindings.calcTm(primer_overlap)
                     primer_len = len(primer_overlap)
-
                 prev_oligo = seq
                 orig_seq = seq
+                prev_overlap = oligo[-1]
                 strand = 1
                 if i % 2 == 0:
                     seq = str(Seq(seq).reverse_complement())
@@ -301,8 +303,6 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
     
         
     return oligo_df
-
-
 
 
 def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_segment_length=130, overlap_len=18):
@@ -340,6 +340,7 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         # Calculate the tm and we'll check that we get the "best" one i.e. closest to 62 deg
         # Get the overlap with the previous sequence
         best_oligo = oligo
+        best_primer_overlap = None
         best_tm_diff = 10000
         best_cut = cut
         part_len_diff = 0
@@ -362,24 +363,27 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
                     best_cut = cut
                     part_len_diff = j + pl
                     best_pl = pl
+                    best_primer_overlap = primer_overlap
         # check the left over size
         if len(sequence[best_cut:]) < overlap_len:
             # Add on the last bit and just have a longer final oligo
-            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff])
+            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff, best_primer_overlap])
             print('CHECK!')
             finished = True
             break
-        rows.append([f'{seq_id}_{i}', best_oligo, sequence, prev_cut, best_cut, part_len + part_len_diff])
+        rows.append([f'{seq_id}_{i}', best_oligo, sequence, prev_cut, best_cut, part_len + part_len_diff, best_primer_overlap])
         prev_cut = best_cut - overlap_len - best_pl
     # Add in the last one
     oligo = sequence[prev_cut:]
     if not finished:
         part_len = len(oligo)
         cut = len(sequence)
+        primer_overlap = oligo[-1 * (prev_cut + overlap_len):overlap_len]
         if len(oligo) < 18:
-            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i}', oligo, sequence, prev_cut, cut,
+                      part_len, primer_overlap])
         print(prev_cut, part_len, len(sequence), oligo)
-        rows.append([f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+        rows.append([f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len, primer_overlap])
     return rows
 
 
