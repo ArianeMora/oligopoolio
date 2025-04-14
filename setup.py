@@ -73,7 +73,8 @@ setup(name='oligopoolio',
                         'pandas',
                         'numpy',
                         'gffutils',
-                        'jupyterlab'],
+                        'jupyterlab',
+                        'typer'],
       python_requires='>=3.8',
       data_files=[("", ["LICENSE"])]
       )
