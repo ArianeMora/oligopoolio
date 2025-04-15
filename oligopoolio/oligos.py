@@ -277,8 +277,11 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                     results = check_secondary_structure(primer_overlap)
                     homodimer_tm = results['homodimer']['homodimer_dg']
                     hairpin_tm = results['hairpin']['hairpin_dg']
-                    primer_tm = primer3.bindings.calcTm(primer_overlap)
-                    primer_len = len(primer_overlap)
+                    try:
+                        primer_tm = primer3.bindings.calcTm(primer_overlap)
+                        primer_len = len(primer_overlap)
+                    except:
+                        print(primer_overlap, record)
                 prev_oligo = seq
                 orig_seq = seq
                 prev_overlap = oligo[-1]
