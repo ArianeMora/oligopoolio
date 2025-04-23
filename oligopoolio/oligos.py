@@ -20,6 +20,10 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 
+
+def add_BSA1_primers(fiveprime='CGCCGCGGCCGCGGTCTCC', threeprime='CGGTCTCCGCGGGGCGGCG', remove_cut_site=True):
+    print('Not implemented yet')
+
 def insert_sequence_with_translation(input_file, output_file, insert_position, new_sequence, translation_label, reverse=False):
     """
     Insert a new sequence at a specific position in a GenBank file, add a translation annotation,
@@ -354,23 +358,33 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
                 cut = prev_cut + part_len + pl + j
                 oligo = sequence[prev_cut:cut]
                 primer_overlap = oligo[-1 * (overlap_len + pl):]
-                # Analyze the primer sequence
-                primer_tm = (primer3.bindings.calcTm(primer_overlap) + primer3.bindings.calcTm(str(Seq(primer_overlap).reverse_complement())))/2
-                results = check_secondary_structure(primer_overlap)
-                # Want to have the opp a high homodimer TM
-                homodimer_tm = -1 * results['homodimer']['homodimer_dg']
-                # Get the reverse comp overlap as well
-                if (abs(primer_tm - optimal_temp) + homodimer_tm) < best_tm_diff:
-                    best_tm_diff = abs(primer_tm - optimal_temp) + homodimer_tm
-                    best_oligo = oligo
-                    best_cut = cut
-                    part_len_diff = j + pl
-                    best_pl = pl
-                    best_primer_overlap = primer_overlap
+                if (primer_overlap[0].lower() == 'c' or primer_overlap[0].lower()) == 'g' and (primer_overlap[-1].lower() == 'c' or primer_overlap[-1].lower()) == 'g':
+                    # Analyze the primer sequence
+                    primer_tm = (primer3.bindings.calcTm(primer_overlap) + primer3.bindings.calcTm(str(Seq(primer_overlap).reverse_complement())))/2
+                    results = check_secondary_structure(primer_overlap)
+                    # Want to have the opp a high homodimer TM
+                    # But we also only care about homodimer if it's < 0 i.e. we don't have to maximize it...
+                    if results['homodimer']['homodimer_dg'] < 0:
+                        homodimer_tm = -1 * results['homodimer']['homodimer_dg']
+                    else:
+                        homodimer_tm = 0
+                    # Get the reverse comp overlap as well
+                    if (abs(primer_tm - optimal_temp) + homodimer_tm) < best_tm_diff:
+                        best_tm_diff = abs(primer_tm - optimal_temp) + homodimer_tm
+                        best_oligo = oligo
+                        best_cut = cut
+                        part_len_diff = j + pl
+                        best_pl = pl
+                        best_primer_overlap = primer_overlap
         # check the left over size
-        if len(sequence[best_cut:]) < overlap_len:
+        if len(sequence[best_cut:]) < (58):
+            break
             # Add on the last bit and just have a longer final oligo
-            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff, best_primer_overlap])
+            best_primer_overlap = sequence[len(sequence) - 58: best_cut]
+            best_cut = len(sequence) - 58
+            len_overlap = len(best_primer_overlap)
+            print(best_primer_overlap, best_cut, len_overlap)
+            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut, len_overlap, best_primer_overlap])
             print('CHECK!')
             finished = True
             break
