@@ -363,7 +363,7 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
                     part_len_diff = j + pl
                     best_pl = pl
         # check the left over size
-        if len(sequence[best_cut:]) < overlap_len:
+        if len(sequence[best_cut:]) < 30:
             # Add on the last bit and just have a longer final oligo
             rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff])
             print('CHECK!')
