@@ -214,11 +214,12 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
 
 def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
                max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=90, max_segment_length=130, max_length=1500, genbank_file=None,
-               insert_position=0, simple=False, codon_optimize=True):
+               insert_position=0, simple=False, codon_optimize=True, bsa=False):
     """ Get the oligos for a dataframe:
     sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
     """
     rows = []   
+    record = None
     for seq_id, protein_sequence in df[[id_column, protein_column]].values:
         # Add on the primers that the user has provided
         if codon_optimize:
@@ -267,7 +268,7 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 primer_len = None
                 homodimer_tm = None
                 hairpin_tm = None
-                if prev_oligo:
+                if prev_oligo:  
                     # Get the overlap with the previous sequence
                     match = SequenceMatcher(None, prev_oligo, seq).find_longest_match()
                     primer_overlap = prev_oligo[match.a:match.a + match.size]
@@ -281,22 +282,29 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
                 prev_oligo = seq
                 orig_seq = seq
                 strand = 1
-                if i % 2 == 0:
-                    seq = str(Seq(seq).reverse_complement())
-                    strand = -1
+                # Changed this to be the opposite To
+                if bsa == True:
+                    if i % 2 == 1 and i != 0:
+                        seq = str(Seq(seq).reverse_complement())
+                        strand = -1
+                else:
+                    if i % 2 == 0:
+                        seq = str(Seq(seq).reverse_complement())
+                        strand = -1
                 oligo_tm = primer3.bindings.calcTm(seq)
                 if genbank_file:
                     insert_features_from_oligos(record, f"{seq_id}_oligo_{i}", orig_seq, strand, oligo_tm, None)
-                rows.append([seq_id, oligo[0], seq, len(seq), oligo_tm, primer_overlap, primer_tm, primer_len, homodimer_tm, hairpin_tm, oligo[2]])
+                rows.append([seq_id, oligo[0], seq, len(seq), oligo_tm, strand, primer_overlap, primer_tm, primer_len, homodimer_tm, hairpin_tm, oligo[2]])
             if genbank_file:
                 output_file = genbank_file.replace('.', f'_{seq_id}.')
-                record.name = seq_id
-                SeqIO.write(record, f'{output_directory}/{output_file}', "genbank")
+                if genbank_file:
+                    record.name = seq_id
+                    SeqIO.write(record, f'{output_directory}/{output_file}', "genbank")
         else:
             u.warn_p([f"Warning: {seq_id} did not have any oligos built. ", optimzed_sequence])
-            rows.append([seq_id, None, optimzed_sequence, len(optimzed_sequence), None, None, None, None, None, None, None])
+            rows.append([seq_id, None, optimzed_sequence, len(optimzed_sequence), None, None, None, None, None, None, None, None])
         
-    oligo_df = pd.DataFrame(rows, columns=["id", "oligo_id", "oligo_sequence", "oligo_length", "oligo_tm", "primer_overlap_with_previous", "overlap_tm_5prime", "overlap_length", 
+    oligo_df = pd.DataFrame(rows, columns=["id", "oligo_id", "oligo_sequence", "oligo_length",  "oligo_tm", "strand","primer_overlap_with_previous", "overlap_tm_5prime", "overlap_length", 
                                             "overlap_homodimer_dg", "overlap_hairpin_dg", "original_sequence"])
     
         
@@ -310,10 +318,12 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
     seq_len = len(sequence)
     num_splits = int(math.ceil(seq_len / min_segment_length))
     # Make sure it is even
-    if num_splits % 2 != 0:
+    if num_splits % 2 == 0:
         num_splits += 1
     remainder = seq_len % num_splits
     # Check if there is a remainder, if so we need to add one to the splits and then share the new remainder 
+    # if remainder == 0:
+    #     num_splits -= 1
     print(num_splits, remainder)        
     prev_overlap = ''
     # Now we want to go through the new part length and while remainder is greater then 0 we distribute this across the splits
@@ -365,11 +375,11 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         # check the left over size
         if len(sequence[best_cut:]) < 30:
             # Add on the last bit and just have a longer final oligo
-            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff])
+            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff, 'last'])
             print('CHECK!')
             finished = True
             break
-        rows.append([f'{seq_id}_{i}', best_oligo, sequence, prev_cut, best_cut, part_len + part_len_diff])
+        rows.append([f'{seq_id}_{i}', best_oligo, sequence, prev_cut, best_cut, part_len + part_len_diff, 'normal'])
         prev_cut = best_cut - overlap_len - best_pl
     # Add in the last one
     oligo = sequence[prev_cut:]
@@ -377,9 +387,9 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         part_len = len(oligo)
         cut = len(sequence)
         if len(oligo) < 18:
-            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i + 1}', oligo, sequence, prev_cut, cut, part_len, 'last'])
         print(prev_cut, part_len, len(sequence), oligo)
-        rows.append([f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+        rows.append([f'{seq_id}_{i + 1}', oligo, sequence, prev_cut, cut, part_len, 'last'])
     return rows
 
 
