@@ -214,7 +214,7 @@ def build_oligos(seq_id: str, sequence: str, output_directory: str, min_gc=0.3, 
 
 def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
                max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=90, max_segment_length=130, max_length=1500, genbank_file=None,
-               insert_position=0, simple=False, codon_optimize=True, bsa=False):
+               insert_position=0, simple=False, optimize=True, bsa=False):
     """ Get the oligos for a dataframe:
     sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
     """
@@ -222,7 +222,7 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
     record = None
     for seq_id, protein_sequence in df[[id_column, protein_column]].values:
         # Add on the primers that the user has provided
-        if codon_optimize:
+        if optimize:
             optimzed_sequence = codon_optimize(protein_sequence, min_gc, max_gc) + sequence_end
         else:
             optimzed_sequence = protein_sequence + sequence_end
@@ -298,7 +298,7 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
             if genbank_file:
                 output_file = genbank_file.replace('.', f'_{seq_id}.')
                 if genbank_file:
-                    record.name = seq_id
+                    record.name = seq_id  # type: ignore 
                     SeqIO.write(record, f'{output_directory}/{output_file}', "genbank")
         else:
             u.warn_p([f"Warning: {seq_id} did not have any oligos built. ", optimzed_sequence])
@@ -311,9 +311,7 @@ def get_oligos(df, protein_column, id_column, output_directory, forward_primer: 
     return oligo_df
 
 
-
-
-def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_segment_length=130, overlap_len=18):
+def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_segment_length=130, overlap_len=18, optimal_temp=62, overlap_buffer=10):
     # Basically get the splits size
     seq_len = len(sequence)
     num_splits = int(math.ceil(seq_len / min_segment_length))
@@ -321,11 +319,7 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
     if num_splits % 2 == 0:
         num_splits += 1
     remainder = seq_len % num_splits
-    # Check if there is a remainder, if so we need to add one to the splits and then share the new remainder 
-    # if remainder == 0:
-    #     num_splits -= 1
     print(num_splits, remainder)        
-    prev_overlap = ''
     # Now we want to go through the new part length and while remainder is greater then 0 we distribute this across the splits
     max_part_len = math.floor(seq_len/num_splits)
     split_counts = {}
@@ -333,7 +327,6 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         split_counts[i] = max_part_len
     # Now distribute the remainder
     split_count = 0
-    print(max_part_len, num_splits, seq_len, max_part_len * num_splits)
     for i in range(0, remainder + 1):
         split_counts[split_count] += 1
         split_count += 1
@@ -353,9 +346,8 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         best_tm_diff = 10000
         best_cut = cut
         part_len_diff = 0
-        best_pl = 0
-        optimal_temp = 62
-        for pl in range(10, 0, -1):
+        best_pl = 0 # The buffer of the overlap - was 10 by default
+        for pl in range(overlap_buffer, 0, -1):
             for j in range(0, max_segment_length - min_segment_length):
                 cut = prev_cut + part_len + pl + j
                 oligo = sequence[prev_cut:cut]
@@ -365,12 +357,15 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
                 results = check_secondary_structure(primer_overlap)
                 # Want to have the opp a high homodimer TM
                 homodimer_tm = -1 * results['homodimer']['homodimer_dg']
-                # Get the reverse comp overlap as well
+                # Since the homodimer is negative and we're trying to minimize invert this.
+                if homodimer_tm < 1:
+                    # Ignore this unless it's actually a problem (otherwise we want to just care about temperature)
+                    homodimer_tm = 0
                 if (abs(primer_tm - optimal_temp) + homodimer_tm) < best_tm_diff:
                     best_tm_diff = abs(primer_tm - optimal_temp) + homodimer_tm
                     best_oligo = oligo
                     best_cut = cut
-                    part_len_diff = j + pl
+                    part_len_diff = j + pl  # Add the new offset and the overlap buffer (here we allow 18 to 29)
                     best_pl = pl
         # check the left over size
         if len(sequence[best_cut:]) < 30:
@@ -387,9 +382,9 @@ def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_s
         part_len = len(oligo)
         cut = len(sequence)
         if len(oligo) < 18:
-            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i + 1}', oligo, sequence, prev_cut, cut, part_len, 'last'])
+            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{split_counts + 1}', oligo, sequence, prev_cut, cut, part_len, 'last'])
         print(prev_cut, part_len, len(sequence), oligo)
-        rows.append([f'{seq_id}_{i + 1}', oligo, sequence, prev_cut, cut, part_len, 'last'])
+        rows.append([f'{seq_id}_{split_counts}', oligo, sequence, prev_cut, cut, part_len, 'last'])
     return rows
 
 
@@ -399,13 +394,12 @@ def codon_optimize(protein_sequence: str, min_gc=0.3, max_gc=0.7):
     problem = dnachisel.DnaOptimizationProblem(
         sequence=seq,
         constraints=[
-            AvoidPattern("BsaI_site"),
-            EnforceGCContent(mini=min_gc, maxi=max_gc, window=50),
-            EnforceTranslation(location=(0, len(seq))), 
-            AvoidStopCodons(
-                location=(0, len(seq)-3)) # Let there be stop codons in the last bit
+            AvoidPattern("BsaI_site"), # type: ignore
+            EnforceGCContent(mini=min_gc, maxi=max_gc, window=50), # type: ignore
+            EnforceTranslation(location=(0, len(seq))), # type: ignore
+            AvoidStopCodons(location=(0, len(seq)-3)) # type: ignore Let there be stop codons in the last bit
         ],
-        objectives=[CodonOptimize(species='e_coli', location=(0, len(seq)))]
+        objectives=[CodonOptimize(species='e_coli', location=(0, len(seq)))] # type: ignore
     )
     # SOLVE THE CONSTRAINTS, OPTIMIZE WITH RESPECT TO THE OBJECTIVE
     problem.resolve_constraints()
