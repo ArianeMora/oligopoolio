@@ -12,20 +12,256 @@ from primer3 import calc_hairpin, calc_homodimer
 import math
 from dnachisel import *
 
-u = SciUtil()
-
 import pyswarms as ps
 import Levenshtein
 import numpy as np
 from functools import partial
 import random
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import Levenshtein
+from jinja2 import Template
+from weasyprint import HTML
+import io
+import base64
+import matplotlib
+
+u = SciUtil()
+
+# Use Arial
+matplotlib.rcParams['font.family'] = 'Arial'
+sns.set(style="ticks")
+
+def plot_to_base64(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+from dna_features_viewer import BiopythonTranslator
+from Bio import SeqIO
+import matplotlib.pyplot as plt
+
+def plot_linear_section_from_gb(file_list, seq_list, feature_start=None, feature_filter=None):
+    """
+    Returns base64-encoded plots of GenBank features in linear section.
+    """
+    plots = []
+
+    class CustomTranslator(BiopythonTranslator):
+        def compute_feature_color(self, feature):
+            return "#ffd700" if "primer" in feature.type.lower() else "#87cefa"
+
+        def compute_filtered_features(self, features):
+            if feature_filter:
+                return [f for f in features if feature_filter(f)]
+            return features
+
+    for i, file_path in enumerate(file_list):
+        record = SeqIO.read(file_path, "genbank")
+        translator = CustomTranslator()
+        graphic_record = translator.translate_record(record)
+
+        graphic_record = graphic_record.crop((feature_start - 20, feature_start + len(seq_list[i]) + 50))
+
+        fig, ax = plt.subplots(figsize=(10, 2))
+        graphic_record.plot(ax=ax)
+        ax.set_title(f"{os.path.basename(file_path)}")
+        img_base64 = plot_to_base64(fig)
+        plt.close(fig)
+
+        plots.append({
+            "name": os.path.basename(file_path),
+            "image": img_base64
+        })
+
+    return plots
 
 
+def generate_pdf_report(oligo_df, seq_list, gb_file_list, insert_position, min_similarity=8, output_pdf_path="oligo_report.pdf"):
+    """ Make a PDF since it's easier than looking through..."""
+    overlaps = [x for x in oligo_df['primer_overlap_with_previous'].values if x is not None]
+    ids = oligo_df['id'].unique()
+    plt.rcParams['svg.fonttype'] = 'none'  # Ensure text is saved as text
+    plt.rcParams['figure.figsize'] = (3,3)
+    sns.set(rc={'figure.figsize': (3,3), 'font.family': 'sans-serif', 'font.sans-serif': 'Arial', 'font.size': 12}, 
+            style='ticks')
+    # Summary stats
+    summaries = []
+    for seq_id, grp in oligo_df.groupby('id'):
+        summaries.append({
+            'id': seq_id,
+            'min_tm': np.nanmin(grp['overlap_tm_5prime']),
+            'max_tm': np.nanmax(grp['overlap_tm_5prime']),
+            'min_dg': np.nanmin(grp['overlap_homodimer_dg']),
+            'min_len': np.nanmin(grp['oligo_length']),
+            'max_len': np.nanmax(grp['oligo_length']),
+            'min_ovl': np.nanmin(grp['overlap_length']),
+            'max_ovl': np.nanmax(grp['overlap_length']),
+            'best_cost': np.nanmin(grp['best_cost']) # Always the same... 
+
+        })
+
+    # Set seaborn style globally
+    sns.set(style="ticks", context="notebook", font="Arial")
+    # Extract overlaps and their corresponding IDs
+    overlaps = [x for x in oligo_df['primer_overlap_with_previous'].values if x is not None]
+    overlap_ids = oligo_df[~oligo_df['primer_overlap_with_previous'].isna()]['oligo_id'].tolist()
+    n = len(overlaps)
+    
+    # Build full distance matrix
+    dist_matrix = np.full((n, n), np.nan)
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                dist = Levenshtein.distance(overlaps[i], overlaps[j])
+                if dist < min_similarity:
+                    dist_matrix[i, j] = dist
+    
+    # Create labeled DataFrame
+    dist_df = pd.DataFrame(dist_matrix, index=overlap_ids, columns=overlap_ids)
+    
+    # Drop rows/cols where all values are NaN
+    dist_df = dist_df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+    
+    # Plot only if there's something to show
+    if not dist_df.empty:
+        fig1, ax1 = plt.subplots(figsize=(max(6, dist_df.shape[0]), max(5, dist_df.shape[1])))
+        sns.heatmap(dist_df, annot=True, fmt=".0f", cmap="coolwarm", cbar=True, square=True, ax=ax1,
+                    linewidths=0.5, linecolor="lightgrey")
+        ax1.set_title(f"Levenshtein Distances < {min_similarity}", fontsize=14)
+        ax1.set_xlabel("Sequence ID")
+        ax1.set_ylabel("Sequence ID")
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        ax1 = clean_plt(ax1)
+        heatmap_base64 = plot_to_base64(fig1)
+        plt.close(fig1)
+    else:
+        heatmap_base64 = None  # You can handle this later in the HTML/PDF
+    # --- Temperature Plot ---
+    fig2, ax2 = plt.subplots(figsize=(8, 4))
+    df_temp = pd.DataFrame(summaries)
+    sns.lineplot(x="id", y="min_tm", data=df_temp, marker="o", label="Min Tm", ax=ax2, color="blue")
+    sns.lineplot(x="id", y="max_tm", data=df_temp, marker="o", label="Max Tm", ax=ax2, color="lightblue")
+    ax2.set_title("Overlap Tm per ID", fontsize=14)
+    ax2.set_ylabel("Temperature (°C)")
+    ax2.set_xlabel("ID")
+    ax2 = clean_plt(ax2)
+    temp_plot_base64 = plot_to_base64(fig2)
+    plt.close(fig2)
+    
+    # --- Length Plot ---
+    fig3, ax3 = plt.subplots(figsize=(8, 4))
+    sns.lineplot(x="id", y="min_len", data=df_temp, marker="s", label="Min Length", ax=ax3, color="green")
+    sns.lineplot(x="id", y="max_len", data=df_temp, marker="s", label="Max Length", ax=ax3, color="lightgreen")
+    ax3.set_title("Oligo Length per ID", fontsize=14)
+    ax3.set_ylabel("Length (bp)")
+    ax3.set_xlabel("ID")
+    ax3 = clean_plt(ax3)
+    len_plot_base64 = plot_to_base64(fig3)
+    plt.close(fig3)
+
+    gb_section_plots = plot_linear_section_from_gb(
+        file_list=gb_file_list,
+        seq_list=seq_list,
+        feature_start=insert_position,  # Optional
+        #feature_filter=lambda f: "seq" in f.type.lower()  # Optional
+    )
+    # HTML with inline CSS for Arial
+    html_template = """
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1, h2 {font-family: Arial, sans-serif; color: #333; }
+            table { font-family: Arial, sans-serif; border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+            th, td { border: 1px solid #aaa; padding: 8px; text-align: center; }
+            th { background-color: #f2f2f2; }
+            img { max-width: 100%; height: auto; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <h1>Oligo Evaluation Report</h1>
+
+        <h2>Summary Table</h2>
+        <table>
+            <tr>
+                <th>ID</th><th>Min Tm</th><th>Max Tm</th><th>Min ΔG</th>
+                <th>Min Length</th><th>Max Length</th><th>Min Overlap</th><th>Max Overlap</th><th>Best cost</th>
+            </tr>
+            {% for s in summaries %}
+            <tr>
+                <td>{{ s.id }}</td>
+                <td>{{ "%.2f"|format(s.min_tm) }}</td>
+                <td>{{ "%.2f"|format(s.max_tm) }}</td>
+                <td>{{ "%.2f"|format(s.min_dg) }}</td>
+                <td>{{ "%.0f"|format(s.min_len) }}</td>
+                <td>{{ "%.0f"|format(s.max_len) }}</td>
+                <td>{{ "%.0f"|format(s.min_ovl) }}</td>
+                <td>{{ "%.0f"|format(s.max_ovl) }}</td>
+                <td>{{ "%.0f"|format(s.best_cost) }}</td>
+
+            </tr>
+            {% endfor %}
+        </table>
+
+        <h2>Temperature Plot</h2>
+        <img src="data:image/png;base64,{{ temp_plot_base64 }}" />
+
+        <h2>Oligo Length Plot</h2>
+        <img src="data:image/png;base64,{{ len_plot_base64 }}" />
+
+        <h2>Overlap Similarity Heatmap</h2>
+        <img src="data:image/png;base64,{{ heatmap_base64 }}" />
+
+        <h2>GenBank Linear Section Plots</h2>
+        {% for gb in gb_plots %}
+          <h3>{{ gb.name }}</h3>
+          <img src="data:image/png;base64,{{ gb.image }}" />
+        {% endfor %}
+
+    </body>
+    </html>
+    """
+
+    template = Template(html_template)
+    html_content = template.render(
+        summaries=summaries,
+        heatmap_base64=heatmap_base64,
+        temp_plot_base64=temp_plot_base64,
+        len_plot_base64=len_plot_base64,
+        min_similarity=min_similarity,
+        gb_plots=gb_section_plots
+    )
+
+    # Save to PDF
+    HTML(string=html_content).write_pdf(output_pdf_path)
+    print(f"PDF report saved as: {output_pdf_path}")
+    
+
+def clean_plt(ax):
+    ax.tick_params(direction='out', length=2, width=1.0)
+    ax.spines['bottom'].set_linewidth(1.0)
+    ax.spines['top'].set_linewidth(0)
+    ax.spines['left'].set_linewidth(1.0)
+    ax.spines['right'].set_linewidth(0)
+    ax.tick_params(labelsize=10.0)
+    ax.tick_params(axis='x', which='major', pad=2.0)
+    ax.tick_params(axis='y', which='major', pad=2.0)
+    return ax
+
+    
 def create_oligos(seq_df, seq_col, id_col, genbank_file, bsa, min_overlap, max_overlap, optimal_seq_len, min_seq_len, max_seq_len, tm_tolerance, 
-                  reverse=False, insert_position=5193):
+                  reverse=False, insert_position=5193, backbone_5_overlap='', backbone_3_overlap='', sequence_end=''):
     rows = []
     for seq, seq_id in seq_df[[seq_col, id_col]].values:
-        oligos, best_cost = optimize_fragments_for_gene(seq, min_overlap, max_overlap, optimal_seq_len, min_seq_len, max_seq_len, tm_tolerance)
+        # Add the end on
+        seq = seq + sequence_end
+        # Optimize fragments with the backbone overlap
+        oligos, best_cost = optimize_fragments_for_gene(backbone_5_overlap + seq + backbone_3_overlap, min_overlap, max_overlap, optimal_seq_len, min_seq_len, max_seq_len, tm_tolerance)
         translation_label = f"Insert_{seq_id}"
         record = insert_sequence_with_translation(genbank_file, None, insert_position, seq, translation_label, reverse)
         prev_oligo = None
@@ -80,19 +316,28 @@ def optimize_fragments_for_gene(seq, min_overlap, max_overlap, optimal_seq_len, 
 
     bounds = (lower_bounds, upper_bounds)
 
-    optimizer = ps.single.GlobalBestPSO(
-        n_particles=150,
-        dimensions=num_variables,
-        options={'c1': 0.5, 'c2': 0.5, 'w': 0.7},
-        bounds=bounds
-    )
+    total_best_cost = 100000
+    total_best_pos = None
+    # Do a few runs so that we converge sometimes it gets stuck
+    for run in range(0, 5):
+        optimizer = ps.single.GlobalBestPSO(
+            n_particles=150,
+            dimensions=num_variables,
+            options={'c1': 0.5, 'c2': 0.5, 'w': 0.7},
+            bounds=bounds
+        )
+        best_cost, best_pos = optimizer.optimize(partial(objective_function, seq_len=seq_len, num_fragments=num_fragments, seq=seq,
+                                                         max_overlap=max_overlap, min_overlap=min_overlap,
+                                                         max_seq_len=max_seq_len, min_seq_len=min_seq_len, tm_tolerance=tm_tolerance), iters=100)
+        if best_cost < total_best_cost:
+            total_best_cost = best_cost
+            total_best_pos = best_pos 
 
-    best_cost, best_pos = optimizer.optimize(partial(objective_function, seq_len=seq_len, num_fragments=num_fragments, seq=seq,
-                                                     max_overlap=max_overlap, min_overlap=min_overlap,
-                                                     max_seq_len=max_seq_len, min_seq_len=min_seq_len, tm_tolerance=tm_tolerance), iters=100)
+    best_cost = total_best_cost
+    best_pos = total_best_pos
 
-    cuts = np.sort(np.round(best_pos[:num_cuts]).astype(int))
-    overlaps = np.round(best_pos[num_cuts:]).astype(int)
+    cuts = np.sort(np.round(best_pos[:num_cuts]).astype(int)) # type: ignore
+    overlaps = np.round(best_pos[num_cuts:]).astype(int) # type: ignore
     fragments = get_fragments(cuts, seq_len, num_fragments, overlaps)
     fragment_strings = [seq[start:end] for start, end in fragments]
 
@@ -141,7 +386,8 @@ def objective_function(x, seq_len, num_fragments, seq, tm_optimal=62, min_dist=8
             tm_penalty = np.abs(primer_tm - tm_optimal)
             if len(overlap_seq) < min_overlap or len(overlap_seq) > max_overlap:
                 olap_penalty += 10 * abs(len(overlap_seq) - (min_overlap + max_overlap)/2)
-            temp_penalty += 2*tm_penalty if tm_penalty > tm_tolerance else tm_penalty
+            
+            temp_penalty += 10*tm_penalty if tm_penalty > tm_tolerance else tm_penalty
 
             for frag_len in [end1 - start1, end2 - start2]:
                 if frag_len > max_seq_len:
@@ -149,7 +395,7 @@ def objective_function(x, seq_len, num_fragments, seq, tm_optimal=62, min_dist=8
                 elif frag_len < min_seq_len:
                     seq_len_penalty += 10 * abs(min_seq_len - frag_len)
 
-            homodimer_penalty += 2*abs(homodimer_tm) if homodimer_tm < -3 else abs(homodimer_tm)
+            homodimer_penalty += 2*abs(homodimer_tm) if homodimer_tm < -3 else -1*homodimer_tm
             if overlap_seq[:3] in ['AAA', 'TTT', 'CCC', 'GGG'] or overlap_seq[-3:] in ['AAA', 'TTT', 'CCC', 'GGG']:
                 repeat_penalty += 20
             overlaps_seqs.append(overlap_seq)
