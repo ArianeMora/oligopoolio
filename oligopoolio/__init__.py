@@ -22,7 +22,7 @@ Date: September 2024
 __title__ = 'oligopoolio'
 __description__ = 'pools and primers mateo'
 __url__ = 'https://github.com/arianemora/oligopoolio/'
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 __author__ = 'Ariane Mora'
 __author_email__ = 'ariane.n.mora@gmail.com'
 __license__ = 'GPL3'

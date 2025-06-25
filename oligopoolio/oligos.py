@@ -23,6 +23,9 @@ import io
 import base64
 import matplotlib
 import os
+from dna_features_viewer import BiopythonTranslator
+from Bio import SeqIO
+import matplotlib.pyplot as plt
 
 u = SciUtil()
 
@@ -36,11 +39,6 @@ def plot_to_base64(fig):
     fig.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
-
-
-from dna_features_viewer import BiopythonTranslator
-from Bio import SeqIO
-import matplotlib.pyplot as plt
 
 
 def plot_linear_section_from_gb(
@@ -117,6 +115,7 @@ def generate_pdf_report(
                 "max_len": np.nanmax(grp["oligo_length"]),
                 "min_ovl": np.nanmin(grp["overlap_length"]),
                 "max_ovl": np.nanmax(grp["overlap_length"]),
+                "num_fragments": len(grp["overlap_length"].values),
                 "best_cost": np.nanmin(grp["best_cost"]),  # Always the same...
             }
         )
@@ -254,7 +253,7 @@ def generate_pdf_report(
         <table>
             <tr>
                 <th>ID</th><th>Min Tm</th><th>Max Tm</th><th>Min ΔG</th>
-                <th>Min Length</th><th>Max Length</th><th>Min Overlap</th><th>Max Overlap</th><th>Best cost</th>
+                <th>Min Length (w. primer)</th><th>Max Length (w. primer)</th><th>Min Overlap</th><th>Max Overlap</th><th>Best cost</th><th># Fragments</th>
             </tr>
             {% for s in summaries %}
             <tr>
@@ -267,7 +266,7 @@ def generate_pdf_report(
                 <td>{{ "%.0f"|format(s.min_ovl) }}</td>
                 <td>{{ "%.0f"|format(s.max_ovl) }}</td>
                 <td>{{ "%.0f"|format(s.best_cost) }}</td>
-
+                <td>{{ "%.0f"|format(s.num_fragments) }}</td>
             </tr>
             {% endfor %}
         </table>
@@ -335,6 +334,7 @@ def create_oligos(
     backbone_5_overlap="",
     backbone_3_overlap="",
     sequence_end="",
+    num_rounds=10
 ):
     rows = []
     for seq, seq_id in seq_df[[seq_col, id_col]].values:
@@ -349,6 +349,7 @@ def create_oligos(
             min_seq_len,
             max_seq_len,
             tm_tolerance,
+            num_rounds
         )
         translation_label = f"Insert_{seq_id}"
         record = insert_sequence_with_translation(
@@ -438,6 +439,7 @@ def optimize_fragments_for_gene(
     min_seq_len,
     max_seq_len,
     tm_tolerance,
+    num_rounds
 ):
     seq_len = len(seq)
     num_fragments = int(math.ceil(seq_len / optimal_seq_len))
@@ -459,7 +461,7 @@ def optimize_fragments_for_gene(
     total_best_cost = 100000
     total_best_pos = None
     # Do a few runs so that we converge sometimes it gets stuck
-    for run in range(0, 5):
+    for run in range(0, num_rounds):
         optimizer = ps.single.GlobalBestPSO(
             n_particles=150,
             dimensions=num_variables,
@@ -562,7 +564,7 @@ def objective_function(
                     seq_len_penalty += 10 * abs(min_seq_len - frag_len)
 
             homodimer_penalty += (
-                2 * abs(homodimer_tm) if homodimer_tm < -3 else -1 * homodimer_tm
+                10 * abs(homodimer_tm) if homodimer_tm < -3 else -1 * homodimer_tm
             )
             if overlap_seq[:3] in ["AAA", "TTT", "CCC", "GGG"] or overlap_seq[-3:] in [
                 "AAA",
