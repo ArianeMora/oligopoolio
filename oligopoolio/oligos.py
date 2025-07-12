@@ -26,6 +26,7 @@ import os
 from dna_features_viewer import BiopythonTranslator
 from Bio import SeqIO
 import matplotlib.pyplot as plt
+from tqdm import tqdm 
 
 u = SciUtil()
 
@@ -148,6 +149,7 @@ def generate_pdf_report(
 
     # Plot only if there's something to show
     if not dist_df.empty:
+        
         fig1, ax1 = plt.subplots(
             figsize=(max(6, dist_df.shape[0]), max(5, dist_df.shape[1]))
         )
@@ -169,7 +171,9 @@ def generate_pdf_report(
         plt.yticks(rotation=0)
         ax1 = clean_plt(ax1)
         heatmap_base64 = plot_to_base64(fig1)
+        plt.savefig('heatmap.png')
         plt.close(fig1)
+        
     else:
         heatmap_base64 = None  # You can handle this later in the HTML/PDF
     # --- Temperature Plot ---
@@ -278,7 +282,6 @@ def generate_pdf_report(
         <img src="data:image/png;base64,{{ len_plot_base64 }}" />
 
         <h2>Overlap Similarity Heatmap</h2>
-        <img src="data:image/png;base64,{{ heatmap_base64 }}" />
 
         <h2>GenBank Linear Section Plots</h2>
         {% for gb in gb_plots %}
@@ -337,7 +340,7 @@ def create_oligos(
     num_rounds=10
 ):
     rows = []
-    for seq, seq_id in seq_df[[seq_col, id_col]].values:
+    for seq, seq_id in tqdm(seq_df[[seq_col, id_col]].values):
         # Add the end on
         seq = seq + sequence_end
         # Optimize fragments with the backbone overlap
