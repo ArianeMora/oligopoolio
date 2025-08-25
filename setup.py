@@ -74,7 +74,10 @@ setup(name='oligopoolio',
                         'numpy',
                         'gffutils',
                         'jupyterlab',
-                        'typer'],
+                        'typer', 
+                        'pysam', 
+                        'pyswarms', 
+                        'python-Levenshtein'],
       python_requires='>=3.8',
       data_files=[("", ["LICENSE"])]
       )

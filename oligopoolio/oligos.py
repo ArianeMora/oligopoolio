@@ -566,9 +566,8 @@ def objective_function(
                 elif frag_len < min_seq_len:
                     seq_len_penalty += 10 * abs(min_seq_len - frag_len)
 
-            homodimer_penalty += (
-                10 * abs(homodimer_tm) if homodimer_tm < -3 else -1 * homodimer_tm
-            )
+            homodimer_penalty += 20 * abs(homodimer_tm) if homodimer_tm < -3 else -5 * homodimer_tm
+
             if overlap_seq[:3] in ["AAA", "TTT", "CCC", "GGG"] or overlap_seq[-3:] in [
                 "AAA",
                 "TTT",
