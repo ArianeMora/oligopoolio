@@ -78,6 +78,170 @@ def plot_linear_section_from_gb(
 
     return plots
 
+def build_simple_oligos(seq_id: str, sequence: str, min_segment_length=90, max_segment_length=130, overlap_len=18):
+    # Basically get the splits size
+    seq_len = len(sequence)
+    num_splits = int(math.ceil(seq_len / min_segment_length))
+    # Make sure it is even
+    if num_splits % 2 != 0:
+        num_splits += 1
+    remainder = seq_len % num_splits
+    # Check if there is a remainder, if so we need to add one to the splits and then share the new remainder 
+    print(num_splits, remainder)        
+    prev_overlap = ''
+    # Now we want to go through the new part length and while remainder is greater then 0 we distribute this across the splits
+    max_part_len = math.floor(seq_len/num_splits)
+    split_counts = {}
+    for i in range(0, num_splits + 1):
+        split_counts[i] = max_part_len
+    # Now distribute the remainder
+    split_count = 0
+    print(max_part_len, num_splits, seq_len, max_part_len * num_splits)
+    for i in range(0, remainder + 1):
+        split_counts[split_count] += 1
+        split_count += 1
+        # Iterate through this again
+        if split_count == num_splits + 1:
+            split_count = 0
+    prev_cut = 0
+    rows = []
+    finished = False
+    for i in split_counts:
+        part_len = split_counts[i]
+        cut = prev_cut + part_len
+        oligo = sequence[prev_cut:cut]
+        # Calculate the tm and we'll check that we get the "best" one i.e. closest to 62 deg
+        # Get the overlap with the previous sequence
+        best_oligo = oligo
+        best_tm_diff = 10000
+        best_cut = cut
+        part_len_diff = 0
+        best_pl = 0
+        optimal_temp = 62
+        for pl in range(10, 0, -1):
+            for j in range(0, max_segment_length - min_segment_length):
+                cut = prev_cut + part_len + pl + j
+                oligo = sequence[prev_cut:cut]
+                primer_overlap = oligo[-1 * (overlap_len + pl):]
+                # Analyze the primer sequence
+                primer_tm = (primer3.bindings.calcTm(primer_overlap) + primer3.bindings.calcTm(str(Seq(primer_overlap).reverse_complement())))/2
+                results = check_secondary_structure(primer_overlap)
+                # Want to have the opp a high homodimer TM
+                homodimer_tm = -1 * results['homodimer']['homodimer_dg']
+                # Get the reverse comp overlap as well
+                if (abs(primer_tm - optimal_temp) + homodimer_tm) < best_tm_diff:
+                    best_tm_diff = abs(primer_tm - optimal_temp) + homodimer_tm
+                    best_oligo = oligo
+                    best_cut = cut
+                    part_len_diff = j + pl
+                    best_pl = pl
+        # check the left over size
+        if len(sequence[best_cut:]) < overlap_len:
+            # Add on the last bit and just have a longer final oligo
+            rows.append([f'{seq_id}_{i}', best_oligo + sequence[best_cut:], sequence, prev_cut, best_cut + len(sequence[best_cut:]), part_len + part_len_diff])
+            print('CHECK!')
+            finished = True
+            break
+        rows.append([f'{seq_id}_{i}', best_oligo, sequence, prev_cut, best_cut, part_len + part_len_diff])
+        prev_cut = best_cut - overlap_len - best_pl
+    # Add in the last one
+    oligo = sequence[prev_cut:]
+    if not finished:
+        part_len = len(oligo)
+        cut = len(sequence)
+        if len(oligo) < 18:
+            u.warn_p(["Last oligo very short,.... check this!", f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+        print(prev_cut, part_len, len(sequence), oligo)
+        rows.append([f'{seq_id}_{i}', oligo, sequence, prev_cut, cut, part_len])
+    return rows
+
+
+def get_oligos(df, protein_column, id_column, output_directory, forward_primer: str, reverse_primer: str, sequence_end: str, min_overlap=10, min_gc=0.3, 
+               max_gc=0.7, min_tm=55, max_tm=70, min_segment_length=90, max_segment_length=130, max_length=1500, genbank_file=None,
+               insert_position=0, simple=False, codon_optimize=True):
+    """ Get the oligos for a dataframe:
+    sequence_end is the end of the sequence i.e. TAA, TGA, etc or a histag 
+    """
+    rows = []   
+    for seq_id, protein_sequence in df[[id_column, protein_column]].values:
+        # Add on the primers that the user has provided
+        optimzed_sequence = protein_sequence + sequence_end
+        u.dp([f"Added sequence end with HIS and stop to: {seq_id}, {sequence_end}"])
+
+        if genbank_file:
+            # Add in the optimzed sequence
+            translation_label = f"Insert_{seq_id}"
+            reverse = False  # Set to True for reverse feature, False for forward
+            record = insert_sequence_with_translation(genbank_file, None, insert_position, optimzed_sequence, translation_label, reverse)
+            
+        if optimzed_sequence[:3] != "ATG":
+            u.dp([f"Warning: {seq_id} does not start with a methionine. ", optimzed_sequence[:3]])
+            if 'ATG' not in forward_primer:
+                u.warn_p([f"Warning: {seq_id} does not start with a methionine. AND you don't have a methonine in your primer!!", forward_primer])
+                print("We expect the primer to be in 5 to 3 prime direction.")
+        # ALso check the end and or the reverse primer check for the three ones
+        if optimzed_sequence[-3:] != "TAA" and optimzed_sequence[-3:] != "TGA" and optimzed_sequence[-3:] != "TAG":
+            u.dp([f"Warning: {seq_id} does not end with a stop codon. ", optimzed_sequence[-3:]])
+            if 'TAA' not in reverse_primer and "TGA" not in reverse_primer and "TAG" not in reverse_primer:
+                u.warn_p([f"Warning: {seq_id} does not end with a stop codon. AND you don't have a stop codon in your primer!!", reverse_primer])
+                print("We expect the primer to be in 5 to 3 prime direction.")
+        codon_optimized_sequence = forward_primer + optimzed_sequence + reverse_primer
+        #try:
+        # Check now some simple things like that there is 
+        if simple:
+            oligos = build_simple_oligos(seq_id, codon_optimized_sequence, min_segment_length, max_segment_length)
+        # except Exception as e:
+        #     u.warn_p([f"Warning: {seq_id} did not have any oligos built. ", e])
+        #     oligos = []
+        prev_oligo = None
+        # If a genbank file was provided also just add in the new sequnece
+        if len(oligos) > 0:
+            for i, oligo in enumerate(oligos):
+                seq = oligo[1]
+                # CHeck that there is an overlap with the previous sequence and that it is not too short
+                # Also make sure we swap the directions of the oligos so they automatically anneal
+                # Also assert that the start is a methionine (and if not warn it... )
+                primer_overlap = None
+                primer_tm = None
+                primer_len = None
+                homodimer_tm = None
+                hairpin_tm = None
+                if prev_oligo:
+                    # Get the overlap with the previous sequence
+                    match = SequenceMatcher(None, prev_oligo, seq).find_longest_match()
+                    primer_overlap = prev_oligo[match.a:match.a + match.size]
+                    # Analyze the primer sequence
+                    results = check_secondary_structure(primer_overlap)
+                    homodimer_tm = results['homodimer']['homodimer_dg']
+                    hairpin_tm = results['hairpin']['hairpin_dg']
+                    primer_tm = primer3.bindings.calcTm(primer_overlap)
+                    primer_len = len(primer_overlap)
+
+                prev_oligo = seq
+                orig_seq = seq
+                strand = 1
+                if i % 2 == 0:
+                    seq = str(Seq(seq).reverse_complement())
+                    strand = -1
+                oligo_tm = primer3.bindings.calcTm(seq)
+                if genbank_file:
+                    insert_features_from_oligos(record, f"{seq_id}_oligo_{i}", orig_seq, strand, oligo_tm, None)
+                rows.append([seq_id, oligo[0], seq, len(seq), oligo_tm, primer_overlap, primer_tm, primer_len, homodimer_tm, hairpin_tm, oligo[2]])
+            if genbank_file:
+                output_file = genbank_file.replace('.', f'_{seq_id}.')
+                record.name = seq_id
+                SeqIO.write(record, f'{output_directory}/{output_file}', "genbank")
+        else:
+            u.warn_p([f"Warning: {seq_id} did not have any oligos built. ", optimzed_sequence])
+            rows.append([seq_id, None, optimzed_sequence, len(optimzed_sequence), None, None, None, None, None, None, None])
+        
+    oligo_df = pd.DataFrame(rows, columns=["id", "oligo_id", "oligo_sequence", "oligo_length", "oligo_tm", "primer_overlap_with_previous", "overlap_tm_5prime", "overlap_length", 
+                                            "overlap_homodimer_dg", "overlap_hairpin_dg", "original_sequence"])
+    
+        
+    return oligo_df
+
+
 
 def generate_pdf_report(
     oligo_df,
@@ -566,7 +730,7 @@ def objective_function(
                 elif frag_len < min_seq_len:
                     seq_len_penalty += 10 * abs(min_seq_len - frag_len)
 
-            homodimer_penalty += 20 * abs(homodimer_tm) if homodimer_tm < -3 else -5 * homodimer_tm
+            homodimer_penalty += (10 * abs(homodimer_tm) if homodimer_tm < -3 else -1 * homodimer_tm)
 
             if overlap_seq[:3] in ["AAA", "TTT", "CCC", "GGG"] or overlap_seq[-3:] in [
                 "AAA",
