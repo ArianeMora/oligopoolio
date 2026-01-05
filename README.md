@@ -181,3 +181,17 @@ Some simple things to try:
 -	Be aware of ones which have a secondary structure hairpin  
 
 
+### Issues on Mac
+Since upgrading to a newer version of mac I had an issue where the libaray couldn't be loaded so I had to do the following:
+
+```
+brew install pango libffi 
+brew install glib 
+brew install weasyprint 
+sudo mkdir /usr/local/lib/
+sudo ln -s /opt/homebrew/opt/glib/lib/libgobject-2.0.0.dylib /usr/local/lib/gobject-2.0
+sudo ln -s /opt/homebrew/opt/pango/lib/libpango-1.0.dylib /usr/local/lib/pango-1.0
+sudo ln -s /opt/homebrew/opt/harfbuzz/lib/libharfbuzz.dylib /usr/local/lib/harfbuzz
+sudo ln -s /opt/homebrew/opt/fontconfig/lib/libfontconfig.1.dylib /usr/local/lib/fontconfig-1
+sudo ln -s /opt/homebrew/opt/pango/lib/libpangoft2-1.0.dylib /usr/local/lib/pangoft2-1.0
+```
