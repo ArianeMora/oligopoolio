@@ -767,6 +767,7 @@ def objective_function(
     return np.array(penalties)
 
 
+
 def insert_sequence_with_translation(
     input_file,
     output_file,
@@ -789,7 +790,9 @@ def insert_sequence_with_translation(
     """
     # Read the original GenBank file
     record = SeqIO.read(input_file, "genbank")
-
+    record.name = f"{translation_label}_{record.name}"
+    record.id = f"{translation_label}_{record.id}"
+    record.annotations["accessions"] = [record.id]
     # Insert the new sequence at the specified position
     if reverse:
         new_sequence = str(
@@ -808,6 +811,9 @@ def insert_sequence_with_translation(
                 feature.location.end + inserted_length,
                 strand=feature.location.strand,
             )
+        if feature.type == "source" or ("label" in feature.qualifiers and feature.location.start == 0 and feature.location.end == len(record.seq)):
+            old_label = feature.qualifiers.get("label", [""])[0]
+            feature.qualifiers["label"] = [f"{translation_label}{old_label}"]
 
     # Create the feature label
     strand_label = " (reverse)" if reverse else " (forward)"
